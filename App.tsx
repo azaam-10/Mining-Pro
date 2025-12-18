@@ -40,12 +40,13 @@ const App: React.FC = () => {
         ]).select().single();
         if (newProfile) setUserData(formatUserData(newProfile, [], []));
       } else if (profile) {
-        const { data: machines } = await supabase.from('user_machines').select('*').eq('user_id', userId);
+        const { data: machines } = await supabase.from('user_machines').select('*').eq('id', userId); // corrected potential mismatch
+        const { data: actualMachines } = await supabase.from('user_machines').select('*').eq('user_id', userId);
         const { data: txs } = await supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false });
-        setUserData(formatUserData(profile, machines || [], txs || []));
+        setUserData(formatUserData(profile, actualMachines || [], txs || []));
       }
     } catch (err) {
-      console.error("Initialization Error:", err);
+      console.error("Data Fetch Error:", err);
     } finally {
       setLoading(false);
     }
@@ -64,11 +65,15 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      if (session) {
-        await fetchAllUserData(session.user.id);
-      } else {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        setSession(currentSession);
+        if (currentSession) {
+          await fetchAllUserData(currentSession.user.id);
+        } else {
+          setLoading(false);
+        }
+      } catch (e) {
         setLoading(false);
       }
     };
@@ -152,7 +157,7 @@ const App: React.FC = () => {
   if (!userData) return (
     <div className="min-h-screen bg-[#020617] flex items-center justify-center p-10 text-center">
       <div className="space-y-4">
-        <p className="text-red-500 font-bold">حدث خطأ في جلب البيانات</p>
+        <p className="text-red-500 font-bold">حدث خطأ في جلب بيانات البروتوكول</p>
         <button onClick={() => window.location.reload()} className="bg-white text-black px-6 py-2 rounded-lg font-bold">إعادة المحاولة</button>
       </div>
     </div>
@@ -457,17 +462,39 @@ const AuthView = ({ lang, setLang, t, showToast }: any) => {
   const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', password: '', referralCode: '' });
   
   const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true);
-    if (isLogin) {
-      const { error } = await supabase.auth.signInWithPassword({ email: formData.email, password: formData.password });
-      if (error) { showToast(error.message, 'error'); setLoading(false); }
-    } else {
-      const { error } = await supabase.auth.signUp({
-        email: formData.email, password: formData.password,
-        options: { data: { first_name: formData.firstName, last_name: formData.lastName, referred_by: formData.referralCode } }
-      });
-      if (error) { showToast(error.message, 'error'); setLoading(false); }
-      else { showToast('تم تسجيل حسابك بنجاح!', 'success'); setLoading(false); setIsLogin(true); }
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (isLogin) {
+        const { data, error } = await supabase.auth.signInWithPassword({ 
+          email: formData.email, 
+          password: formData.password 
+        });
+        
+        if (error) {
+          let msg = error.message;
+          if (msg.includes("Invalid login credentials")) msg = "البريد الإلكتروني أو كلمة المرور غير صحيحة";
+          showToast(msg, 'error');
+          setLoading(false);
+        }
+      } else {
+        const { error } = await supabase.auth.signUp({
+          email: formData.email, 
+          password: formData.password,
+          options: { data: { first_name: formData.firstName, last_name: formData.lastName, referred_by: formData.referralCode } }
+        });
+        if (error) {
+          showToast(error.message, 'error');
+          setLoading(false);
+        } else {
+          showToast('تم إنشاء الحساب بنجاح، سجل دخولك الآن', 'success');
+          setLoading(false);
+          setIsLogin(true);
+        }
+      }
+    } catch (err: any) {
+      showToast("حدث خطأ تقني غير متوقع", 'error');
+      setLoading(false);
     }
   };
 
@@ -736,7 +763,6 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId }: any) => {
           <button onClick={onClose} className="text-white p-1 hover:bg-white/10 rounded-lg"><X size={20} /></button>
         </div>
 
-        {/* التحذير الأمني الصارم */}
         <div className="bg-red-500/10 border border-red-500/30 p-3.5 rounded-xl flex items-start gap-3 flex-row-reverse shadow-inner animate-pulse">
            <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={18} />
            <div className="text-right">
