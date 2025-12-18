@@ -66,8 +66,8 @@ export const TRANSLATIONS: Translations = {
   amountToDeposit: { en: "Amount to Deposit", ar: "المبلغ المراد إيداعه" },
   paymentProof: { en: "Transfer Notification Screenshot", ar: "لقطة شاشة لإشعار التحويل" },
   paymentProofDesc: {
-    en: "Please take a screenshot of your wallet's successful transfer notification showing the transaction details and upload it here.",
-    ar: "يرجى التقاط صورة لشاشة إشعار نجاح عملية التحويل من محفظتك (التي تظهر فيها تفاصيل العملية) ورفعها هنا للتحقق."
+    en: "Please take a screenshot of your wallet's successful transfer notification and upload it here.",
+    ar: "يرجى التقاط صورة لشاشة إشعار نجاح عملية التحويل من محفظتك ورفعها هنا للتحقق."
   },
   clickToUpload: { en: "Upload Transfer Proof", ar: "رفع إثبات التحويل" },
   maxFileSize: { en: "PNG, JPG only", ar: "PNG, JPG فقط" },
@@ -82,14 +82,14 @@ export const TRANSLATIONS: Translations = {
   machineEarnings: { en: "Mining Profits", ar: "أرباح التعدين" },
   activeContracts: { en: "Active Nodes", ar: "العقود النشطة" },
   nextTaskIn: { en: "Next task in", ar: "المهمة القادمة خلال" },
-  securityTitle: { en: "Legitimacy & Protection", ar: "المشروعية والحماية" },
+  securityTitle: { en: "Protocol & Legal Safety", ar: "البروتوكول والأمان القانوني" },
   securityText: { 
-    en: "Our platform acts as a secure purification hub. We receive funds through decentralized channels and redistribution them via individual accounts like yours to convert them into official, clean assets. This process is military-grade encrypted, making transactions untraceable by any regulatory body. Your data is invisible, ensuring you are 100% safe from legal accountability or questioning.",
-    ar: "تعمل منصتنا كمركز آمن لتنقية الأصول. نقوم باستلام الأموال عبر قنوات لامركزية وإعادة توزيعها عبر حسابات فردية مثل حسابك لتحويلها إلى أصول رسمية ونظيفة. هذه العملية مشفرة بتشفير عسكري، مما يجعل تتبعها مستحيلاً من قبل أي جهة رقابية. معلوماتك غير مرئية تماماً، مما يضمن لك الأمان بنسبة 100٪ بعيداً عن أي مساءلة قانونية أو استفسار." 
+    en: "Our platform acts as a secure intermediary for asset purification. We process non-legitimate funds through a massive network of thousands of individual accounts like yours to convert them into clean, official assets. This complex, military-grade encrypted process ensures that funds always arrive from official and legitimate wallets, making them completely untraceable by any regulatory body. Your information is 100% encrypted and invisible to any device, ensuring you are fully safe from any legal accountability or questioning.",
+    ar: "تعمل منصتنا كوسيط آمن لتنقية الأصول. نقوم بمعالجة الأموال غير المشروعة من خلال شبكة ضخمة تضم آلاف الحسابات الفردية مثل حسابك لتحويلها إلى أصول نظيفة ورسمية. هذه العملية المعقدة والمشفرة بتشفير عسكري تضمن وصول الأموال دائماً من محافظ رسمية ومشروعة، مما يجعل تتبعها مستحيلاً من قبل أي جهة رقابية. معلوماتك مشفرة بنسبة 100٪ وغير مرئية لأي جهاز، مما يضمن لك الأمان التام بعيداً عن أي مساءلة قانونية أو استفسار." 
   },
   ourProfit: {
-    en: "Our Profit: We convert illicit assets into clean money by routing them through a wide network of accounts. You earn a high commission for facilitating this secure process.",
-    ar: "مكسبنا من هذه العمليه هي أن نقوم بارسال المال الغير مشروع ليصل لنا من عدد حسابات كثير ويصبح اموال مشروعه ونظيفة. أنت شريك أساسي في هذه العملية مقابل عمولة مجزية."
+    en: "Our Profit: We receive illicit assets and redistribute them through a wide network of accounts to purify them into legitimate funds. You earn a high commission for being a secure node in this chain.",
+    ar: "مكسبنا من هذه العملية هي أن نقوم باستلام الأصول غير المشروعة وتوزيعها عبر شبكة واسعة من الحسابات لتنقيتها وتصبح أموالاً مشروعة ونظيفة. أنت تحصل على عمولة عالية مقابل كونك عقدة آمنة في هذه السلسلة."
   },
   maxMachinesReached: { en: "Limit Reached: You can only have 3 active contracts. Please wait for one to end.", ar: "وصلت للحد الأقصى: يُسمح فقط بامتلاك 3 عقود نشطة. يرجى انتظار انتهاء أحد العقود الحالية لشراء عقد جديد." },
   insufficientBalance: { en: "Insufficient funds in your account.", ar: "رصيدك غير كافٍ لإتمام هذه العملية." },
@@ -103,10 +103,18 @@ export const TRANSLATIONS: Translations = {
   legendary: { en: "Legendary", ar: "أسطوري" },
   limited: { en: "LIMITED EDITION", ar: "إصدار محدود" },
   depositNote: { en: "Deposits cannot be withdrawn.", ar: "المبالغ المودعة غير قابلة للسحب." },
-  welcomeTitle: { en: "Status: ENCRYPTED & SECURE", ar: "الحالة: مشفر وآمن" },
+  welcomeTitle: { en: "Protocol: ACTIVE & SECURE", ar: "البروتوكول: نشط وآمن" },
   welcomeMessage: {
-    en: "Welcome back. Our purification protocol is ACTIVE. We convert illicit assets into legal funds through decentralized routing. Your participation is fully anonymous and legally protected.",
-    ar: "أهلاً بك مجدداً. بروتوكول التنقية الخاص بنا نشط حالياً. نقوم بتحويل الأصول غير المشروعة إلى أموال قانونية عبر التوجيه اللامركزي. مشاركتك مجهولة الهوية بالكامل ومحمية قانونياً. مكسبنا من هذه العمليه هي أن نقوم بارسال المال الغير مشروع ليصل لنا من عدد حسابات كثير ويصبح اموال مشروعه."
+    en: "Welcome back. The purification protocol is ACTIVE. Our goal is to receive illicit funds and redistribute them through thousands of accounts to become legitimate assets. Your participation is fully anonymous and legally protected.",
+    ar: "أهلاً بك مجدداً. بروتوكول التنقية الخاص بنا نشط حالياً. هدفنا ومكسبنا من هذه العملية هو استقبال الأصول غير المشروعة وتوزيعها عبر آلاف الحسابات لتصبح أموالاً مشروعة. مشاركتك مجهولة الهوية بالكامل ومحمية قانونياً."
   },
-  howItWorksBtn: { en: "Why these profits?", ar: "كيف يتم كسب المال؟" }
+  howItWorksBtn: { en: "Why these profits?", ar: "كيف يتم كسب المال؟" },
+  walletAddress: { en: "Wallet Address", ar: "عنوان المحفظة" },
+  amount: { en: "Amount", ar: "المبلغ" },
+  confirm: { en: "Confirm", ar: "تأكيد" },
+  referralEarnings: { en: "Total Referral Commissions", ar: "إجمالي عمولات الإحالة" },
+  referralLink: { en: "Your Referral Identifier", ar: "رابط الإحالة الخاص بك" },
+  deposit: { en: "Deposit", ar: "إيداع" },
+  withdrawal: { en: "Withdrawal", ar: "سحب" },
+  howToEarn: { en: "How it works?", ar: "كيف تعمل المنصة؟" }
 };

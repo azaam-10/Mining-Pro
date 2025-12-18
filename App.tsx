@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -77,7 +76,7 @@ const App: React.FC = () => {
   const [showInfo, setShowInfo] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [user, setUser] = useState<UserState>(() => {
-    const saved = localStorage.getItem('mining_pro_prestige_v10');
+    const saved = localStorage.getItem('mining_pro_v11');
     if (saved) return JSON.parse(saved);
     return {
       balance: 0.00,
@@ -92,7 +91,7 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
-    localStorage.setItem('mining_pro_prestige_v10', JSON.stringify(user));
+    localStorage.setItem('mining_pro_v11', JSON.stringify(user));
   }, [user]);
 
   const t = (key: string) => TRANSLATIONS[key]?.[lang] || key;
@@ -113,12 +112,9 @@ const App: React.FC = () => {
       return false;
     }
 
-    // Purchase Excitement Simulation
-    showToast(lang === 'ar' ? 'جاري الاتصال بقاعدة البيانات...' : 'Connecting to Core...', 'info');
+    showToast(lang === 'ar' ? 'جاري الاتصال بالعقدة المشفرة...' : 'Connecting to Encrypted Node...', 'info');
     await new Promise(r => setTimeout(r, 2000));
-    showToast(lang === 'ar' ? 'جاري تفعيل عقد التبييض...' : 'Activating Purification Node...', 'info');
-    await new Promise(r => setTimeout(r, 1500));
-
+    
     const newUserMachine: UserMachine = {
       id: Date.now(),
       machineId: machine.id,
@@ -128,18 +124,12 @@ const App: React.FC = () => {
       remainingDays: machine.duration
     };
 
-    setUser(prev => {
-      const newBalance = prev.balance - machine.price;
-      // Withdrawble balance cannot exceed total balance
-      const newWithdrawable = Math.min(prev.withdrawableBalance, newBalance);
-      return {
-        ...prev,
-        balance: newBalance,
-        withdrawableBalance: newWithdrawable,
-        ownedMachines: [...prev.ownedMachines, newUserMachine],
-        referralEarnings: prev.referralEarnings + (machine.price * REFERRAL_PERCENT)
-      };
-    });
+    setUser(prev => ({
+      ...prev,
+      balance: prev.balance - machine.price,
+      ownedMachines: [...prev.ownedMachines, newUserMachine],
+      referralEarnings: prev.referralEarnings + (machine.price * REFERRAL_PERCENT)
+    }));
 
     showToast(t('transactionCompleted'), 'success');
     return true;
@@ -153,11 +143,8 @@ const App: React.FC = () => {
     const today = formatDate(new Date());
     if (userMachine.lastClaimDate === today) return false;
 
-    // Task Feedback Delays
-    showToast(lang === 'ar' ? 'جاري تجميع الهاش...' : 'Gathering Hashrate...', 'info');
-    await new Promise(r => setTimeout(r, 1500));
-    showToast(lang === 'ar' ? 'جاري تحويل الأصول للرصيد المسحوب...' : 'Converting Assets to Profits...', 'info');
-    await new Promise(r => setTimeout(r, 1500));
+    showToast(lang === 'ar' ? 'جاري تنقية الأصول وتحويلها لربح مشروع...' : 'Purifying Assets and Converting to Profits...', 'info');
+    await new Promise(r => setTimeout(r, 2000));
     
     setUser(prev => ({
       ...prev,
@@ -179,7 +166,7 @@ const App: React.FC = () => {
 
   const handleDeposit = (amount: number, screenshot: File | null) => {
     if (amount <= 0 || !screenshot) return;
-    showToast(lang === 'ar' ? 'جاري التحقق من إشعار التحويل...' : 'Verifying Notification Screenshot...', 'info');
+    showToast(lang === 'ar' ? 'جاري فحص إشعار التحويل أمنياً...' : 'Security checking transfer notification...', 'info');
     setTimeout(() => {
       setUser(prev => ({
         ...prev,
@@ -211,15 +198,11 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen pb-28 ${lang === 'ar' ? 'rtl text-right font-["Cairo"]' : 'text-left font-sans'} bg-[#020617] text-[#f8fafc] overflow-x-hidden relative`}>
-      <div className="fixed top-[-20%] left-[-10%] w-[60%] h-[60%] bg-blue-600/5 blur-[120px] rounded-full pointer-events-none animate-pulse"></div>
-      <div className="fixed bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-indigo-600/5 blur-[120px] rounded-full pointer-events-none animate-pulse" style={{ animationDelay: '2s' }}></div>
-
-      {/* Welcome Reassurance Modal */}
+      {/* Welcome Modal */}
       {showWelcome && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 animate-in fade-in duration-500">
-          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-xl" onClick={() => setShowWelcome(false)}></div>
-          <div className="relative bg-[#0b0f1a] border border-white/10 w-full max-w-md rounded-[2.5rem] p-8 shadow-[0_0_100px_rgba(37,99,235,0.2)] text-center space-y-8 animate-in zoom-in-95 duration-300">
-            <div className="w-20 h-20 bg-blue-600/10 rounded-full mx-auto flex items-center justify-center border border-blue-500/30 animate-pulse">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-950/95 backdrop-blur-xl">
+          <div className="relative bg-[#0b0f1a] border border-white/10 w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl text-center space-y-8">
+            <div className="w-20 h-20 bg-blue-600/10 rounded-full mx-auto flex items-center justify-center border border-blue-500/30">
               <ShieldCheck className="text-blue-500" size={40} />
             </div>
             <div className="space-y-4">
@@ -228,30 +211,29 @@ const App: React.FC = () => {
             </div>
             <button 
               onClick={() => setShowWelcome(false)}
-              className="w-full bg-white text-black font-black py-4.5 rounded-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-slate-200 transition-all shadow-xl active:scale-95"
+              className="w-full bg-white text-black font-black py-4.5 rounded-2xl uppercase tracking-[0.2em] text-[10px] active:scale-95 transition-all"
             >
-              INITIALIZE INTERFACE
+              دخول البوابة الآمنة
             </button>
           </div>
         </div>
       )}
 
-      {/* Info/How it works Modal */}
+      {/* Info Modal */}
       {showInfo && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md" onClick={() => setShowInfo(false)}></div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/95 backdrop-blur-md">
           <div className="relative bg-[#0b0f1a] border border-white/10 w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
             <div className="p-6 bg-gradient-to-br from-[#1e293b] to-[#0f172a] border-b border-white/5 flex justify-between items-center">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 text-right">
                 <ShieldCheck className="text-blue-500" size={22} />
                 <h3 className="font-black text-white text-lg uppercase tracking-tighter italic">{t('securityTitle')}</h3>
               </div>
-              <button onClick={() => setShowInfo(false)} className="p-1.5 bg-white/5 rounded-full text-slate-400 hover:text-white transition-all"><X size={18} /></button>
+              <button onClick={() => setShowInfo(false)} className="p-1.5 bg-white/5 rounded-full text-slate-400 hover:text-white"><X size={18} /></button>
             </div>
-            <div className="p-7 overflow-y-auto no-scrollbar space-y-7">
+            <div className="p-7 overflow-y-auto no-scrollbar space-y-7 text-right">
               <div className="bg-blue-600/5 border border-blue-500/10 p-6 rounded-2xl space-y-4">
                 <div className="flex items-center gap-2 text-blue-500 mb-1">
-                  <Lock size={16} className="animate-pulse" />
+                  <Lock size={16} />
                   <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t('howItWorksBtn')}</span>
                 </div>
                 <p className="text-[12px] leading-relaxed text-slate-300 font-medium">{t('securityText')}</p>
@@ -266,9 +248,9 @@ const App: React.FC = () => {
             </div>
             <button 
               onClick={() => setShowInfo(false)}
-              className="m-7 bg-white text-black font-black py-4.5 rounded-xl uppercase tracking-[0.2em] text-[10px] hover:bg-slate-200 transition-all shadow-xl active:scale-95"
+              className="m-7 bg-white text-black font-black py-4.5 rounded-xl uppercase tracking-[0.2em] text-[10px] active:scale-95 transition-all shadow-xl"
             >
-              PROCEED WITH CONFIDENCE
+              استمرار بأمان تام
             </button>
           </div>
         </div>
@@ -277,7 +259,7 @@ const App: React.FC = () => {
       {/* Toasts */}
       <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] w-full max-w-[90%] space-y-2.5 pointer-events-none">
         {toasts.map(toast => (
-          <div key={toast.id} className={`flex items-center gap-3.5 p-4.5 rounded-2xl shadow-2xl animate-bounce-in pointer-events-auto backdrop-blur-3xl border ${
+          <div key={toast.id} className={`flex items-center gap-3.5 p-4.5 rounded-2xl shadow-2xl pointer-events-auto backdrop-blur-3xl border ${
             toast.type === 'error' ? 'bg-red-500/30 border-red-500/50 text-red-100' : 
             toast.type === 'success' ? 'bg-blue-600/30 border-blue-600/50 text-blue-100' : 
             'bg-slate-900/80 border-slate-700/50 text-slate-100'
@@ -331,32 +313,6 @@ const App: React.FC = () => {
           <NavItem icon={UserIcon} label={t('profile')} active={location.pathname === '/profile'} onClick={() => navigate('/profile')} />
         </div>
       </nav>
-
-      <style>{`
-        @keyframes bounce-in { 0% { transform: translate(-50%, -30px); opacity: 0; } 100% { transform: translate(-50%, 0); opacity: 1; } }
-        .animate-bounce-in { animation: bounce-in 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards; }
-        ::-webkit-scrollbar { width: 0; display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .perspective-aura { perspective: 1000px; }
-        .shimmer {
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
-          background-size: 200% 100%;
-          animation: shimmer 3s infinite linear;
-        }
-        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-        .pulse-soft { animation: pulse-soft 3s infinite ease-in-out; }
-        @keyframes pulse-soft { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.6; } }
-        .machine-card-hover:active { transform: scale(0.98); }
-        .haptic-click:active { transform: translateY(2px); transition: 0.1s; }
-        @keyframes haptic-shake {
-          0% { transform: translateX(0); }
-          25% { transform: translateX(3px); }
-          50% { transform: translateX(-3px); }
-          75% { transform: translateX(3px); }
-          100% { transform: translateX(0); }
-        }
-        .animate-haptic { animation: haptic-shake 0.1s ease-in-out; }
-      `}</style>
     </div>
   );
 };
@@ -385,39 +341,35 @@ const HomeView = ({ user, t, onShowInfo }: any) => {
   }, []);
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-top-10 duration-700">
-      <div className="relative group perspective-aura">
-        <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600 rounded-[2.5rem] blur opacity-15 group-hover:opacity-30 transition-opacity duration-700 animate-pulse"></div>
+    <div className="space-y-8">
+      <div className="relative group">
+        <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600 rounded-[2.5rem] blur opacity-15"></div>
         <div className="relative bg-[#0b0f1a] border border-white/10 rounded-[2.5rem] p-8 shadow-2xl overflow-hidden min-h-[320px] flex flex-col justify-between">
-          <div className="absolute top-[-20%] right-[-10%] p-10 opacity-[0.03] scale-[2.5] rotate-12 pointer-events-none transition-transform duration-1000 group-hover:scale-[2.8]">
-            <Crown size={150} />
-          </div>
-          
           <div className="relative z-10 space-y-5">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping shadow-[0_0_10px_rgba(59,130,246,1)]"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,1)]"></div>
                 <p className="text-white/40 font-black text-[9px] uppercase tracking-[0.3em] italic">{t('balanceTitle')}</p>
               </div>
               <button 
                 onClick={onShowInfo}
-                className="bg-white/5 px-4 py-2 rounded-xl backdrop-blur-3xl border border-white/10 hover:bg-white/10 transition-all flex items-center gap-2.5 active:scale-95 group/btn haptic-click"
+                className="bg-white/5 px-4 py-2 rounded-xl backdrop-blur-3xl border border-white/10 hover:bg-white/10 transition-all flex items-center gap-2.5 active:scale-95"
               >
                  <HelpCircle size={14} className="text-blue-500" />
                  <span className="text-[9px] font-black uppercase tracking-[0.1em] text-white/90">{t('howItWorksBtn')}</span>
               </button>
             </div>
             
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-baseline gap-3">
-                 <h2 className="text-6xl font-black tracking-tighter text-white drop-shadow-lg">
+            <div className="flex flex-col gap-1.5 text-right">
+              <div className="flex items-baseline gap-3 justify-end">
+                 <h2 className="text-6xl font-black tracking-tighter text-white">
                    {user.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                  </h2>
-                 <span className="text-lg font-black text-blue-500 tracking-wider italic animate-pulse">USDT</span>
+                 <span className="text-lg font-black text-blue-500 tracking-wider italic">USDT</span>
               </div>
             </div>
             
-            <div className="flex items-center gap-3 py-3 px-5 bg-black/40 rounded-xl border border-white/5 w-fit backdrop-blur-xl mt-5">
+            <div className="flex items-center gap-3 py-3 px-5 bg-black/40 rounded-xl border border-white/5 w-fit backdrop-blur-xl mt-5 ml-auto">
                <div className="p-1.5 bg-blue-500/10 rounded-lg">
                 <Wallet size={14} className="text-blue-400" />
                </div>
@@ -428,50 +380,44 @@ const HomeView = ({ user, t, onShowInfo }: any) => {
           </div>
 
           <div className="flex gap-4 relative z-10 mt-8">
-            <button onClick={() => navigate('/recharge')} className="flex-1 bg-white text-black font-black py-4.5 rounded-2xl flex items-center justify-center gap-3 hover:bg-slate-100 active:scale-[0.97] transition-all shadow-md text-[10px] uppercase tracking-[0.2em]">
+            <button onClick={() => navigate('/recharge')} className="flex-1 bg-white text-black font-black py-4.5 rounded-2xl flex items-center justify-center gap-3 hover:bg-slate-100 active:scale-[0.97] transition-all text-[10px] uppercase tracking-[0.2em]">
               <ArrowDownCircle size={18} className="text-blue-600" /> {t('recharge')}
             </button>
-            <button onClick={() => navigate('/withdraw')} className="flex-1 bg-blue-600 text-white font-black py-4.5 rounded-2xl flex items-center justify-center gap-3 hover:bg-blue-500 active:scale-[0.97] transition-all shadow-md text-[10px] uppercase tracking-[0.2em]">
+            <button onClick={() => navigate('/withdraw')} className="flex-1 bg-blue-600 text-white font-black py-4.5 rounded-2xl flex items-center justify-center gap-3 hover:bg-blue-500 active:scale-[0.97] transition-all text-[10px] uppercase tracking-[0.2em]">
               <ArrowUpCircle size={18} /> {t('withdraw')}
             </button>
           </div>
         </div>
       </div>
 
-      <div className="bg-white/[0.03] border border-white/5 rounded-2xl py-3 px-6 flex items-center overflow-hidden shadow-inner h-12 relative haptic-click">
+      <div className="bg-white/[0.03] border border-white/5 rounded-2xl py-3 px-6 flex items-center overflow-hidden shadow-inner h-12 relative">
         <div className="absolute left-0 top-0 bottom-0 w-10 bg-gradient-to-r from-[#020617] to-transparent z-10"></div>
         <div className="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-[#020617] to-transparent z-10"></div>
         {activeUsers.length > 0 ? (
-          <div className="flex items-center gap-3 animate-in slide-in-from-bottom-6 duration-700 w-full justify-center">
-            <Activity size={14} className="text-emerald-500 animate-pulse" />
+          <div className="flex items-center gap-3 w-full justify-center">
+            <Activity size={14} className="text-emerald-500" />
             <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500 italic">
               <span className="text-slate-200 font-black not-italic">{activeUsers[0].name}</span> harvested <span className="text-emerald-400 font-black">{activeUsers[0].amount} USDT</span>
             </span>
           </div>
         ) : (
           <div className="flex items-center gap-3 w-full justify-center opacity-40">
-             <Globe size={14} className="animate-spin duration-1000" />
-             <span className="text-[9px] font-black uppercase tracking-[0.4em]">Optimizing protocol...</span>
+             <Globe size={14} />
+             <span className="text-[9px] font-black uppercase tracking-[0.4em]">تحديث البروتوكول...</span>
           </div>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-         <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5 relative overflow-hidden group hover:border-blue-500/30 transition-all duration-700 shadow-xl backdrop-blur-md">
-            <div className="absolute top-0 right-0 p-4 opacity-[0.03] rotate-12 group-hover:scale-125 transition-transform">
-              <Database size={40} />
-            </div>
-            <div className="w-10 h-10 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4 border border-blue-500/20 text-blue-500">
+         <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5 relative overflow-hidden text-right">
+            <div className="w-10 h-10 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4 border border-blue-500/20 text-blue-500 ml-auto">
                <Cpu size={20} />
             </div>
             <p className="text-[9px] text-slate-500 font-black uppercase mb-1 tracking-[0.2em]">{t('activeContracts')}</p>
             <p className="text-2xl font-black text-white italic tracking-tighter">{user.ownedMachines.length} <span className="text-[10px] text-slate-700 font-bold ml-1.5 uppercase not-italic">/ 3</span></p>
          </div>
-         <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-700 shadow-xl backdrop-blur-md">
-            <div className="absolute top-0 right-0 p-4 opacity-[0.03] -rotate-12 group-hover:scale-125 transition-transform">
-              <BarChart3 size={40} />
-            </div>
-            <div className="w-10 h-10 bg-emerald-600/10 rounded-xl flex items-center justify-center mb-4 border border-emerald-500/20 text-emerald-500">
+         <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5 relative overflow-hidden text-right">
+            <div className="w-10 h-10 bg-emerald-600/10 rounded-xl flex items-center justify-center mb-4 border border-emerald-500/20 text-emerald-500 ml-auto">
                <TrendingUp size={20} />
             </div>
             <p className="text-[9px] text-slate-500 font-black uppercase mb-1 tracking-[0.2em]">{t('machineEarnings')}</p>
@@ -484,25 +430,24 @@ const HomeView = ({ user, t, onShowInfo }: any) => {
 
       <button 
         onClick={() => navigate('/profile')}
-        className="w-full bg-gradient-to-br from-slate-900 to-[#0b0f1a] border border-white/5 p-8 rounded-[2.5rem] flex items-center justify-between group hover:border-white/10 transition-all shadow-xl relative overflow-hidden haptic-click"
+        className="w-full bg-gradient-to-br from-slate-900 to-[#0b0f1a] border border-white/5 p-8 rounded-[2.5rem] flex items-center justify-between shadow-xl relative overflow-hidden"
       >
-          <div className="absolute inset-0 bg-blue-600/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <div className="flex items-center gap-6 relative z-10">
-            <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500 border border-blue-500/20 group-hover:scale-105 transition-transform">
+          <div className="flex items-center gap-6 relative z-10 text-right">
+            <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500 border border-blue-500/20">
                <History size={28}/>
             </div>
-            <div className="text-left space-y-1">
+            <div className="space-y-1">
                <h4 className="font-black text-base uppercase tracking-[0.1em] italic">{t('history')}</h4>
                <p className="text-[9px] text-slate-600 font-black uppercase tracking-[0.15em]">Auditing & Proof</p>
             </div>
           </div>
-          <div className="p-3 bg-white/5 rounded-full group-hover:translate-x-1 transition-transform border border-white/5 shadow-md">
-            <ArrowRight size={20} className="text-slate-500 group-hover:text-white" />
+          <div className="p-3 bg-white/5 rounded-full border border-white/5 shadow-md">
+            <ArrowRight size={20} className="text-slate-500" />
           </div>
       </button>
 
       <div className="flex flex-col items-center gap-2.5 pb-2">
-        <div className="flex items-center gap-2.5 bg-white/[0.02] px-4 py-1.5 rounded-full border border-white/5 opacity-40 hover:opacity-100 transition-opacity duration-1000">
+        <div className="flex items-center gap-2.5 bg-white/[0.02] px-4 py-1.5 rounded-full border border-white/5 opacity-40">
           <ShieldCheck size={12} className="text-blue-500" />
           <span className="text-[7px] font-black uppercase tracking-[0.4em]">Protocol Secured v4.0.1</span>
         </div>
@@ -516,16 +461,16 @@ const RechargeView = ({ onDeposit, t }: any) => {
   const [file, setFile] = useState<File | null>(null);
 
   return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-8 duration-500">
+    <div className="space-y-6">
       <div className="flex justify-between items-center px-1 text-right">
          <h2 className="text-lg font-black flex items-center gap-3 uppercase italic tracking-tighter">
-           {t('rechargeWallet')} <div className="p-1.5 bg-blue-500/10 rounded-full border border-blue-500/30 text-blue-500 haptic-click"><ArrowDown size={14}/></div>
+           {t('rechargeWallet')} <div className="p-1.5 bg-blue-500/10 rounded-full border border-blue-500/30 text-blue-500"><ArrowDown size={14}/></div>
          </h2>
       </div>
 
       <div className="bg-[#1c121a] border border-[#3d1a1e] rounded-2xl p-6 flex gap-4 shadow-xl">
          <div className="mt-0.5 flex-shrink-0">
-           <div className="w-8 h-8 rounded-full border-2 border-red-500 flex items-center justify-center text-red-500 font-black italic text-xs animate-pulse">!</div>
+           <div className="w-8 h-8 rounded-full border-2 border-red-500 flex items-center justify-center text-red-500 font-black italic text-xs">!</div>
          </div>
          <div className="space-y-1 text-right">
             <h4 className="text-[#f87171] font-black text-xs uppercase tracking-widest">{t('securityWarningTitle')}</h4>
@@ -539,8 +484,7 @@ const RechargeView = ({ onDeposit, t }: any) => {
             {t('supportedNetwork')} <span className="text-white not-italic">BEP20 (BSC)</span>
           </p>
           <div className="bg-[#020617] border border-white/5 p-6 rounded-2xl flex items-center gap-4 group hover:border-blue-500/50 transition-all shadow-inner relative overflow-hidden">
-            <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100"></div>
-            <Copy size={18} className="text-slate-600 group-hover:text-blue-500 cursor-pointer haptic-click relative z-10" onClick={() => {navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert('Copied!')}} />
+            <Copy size={18} className="text-slate-600 cursor-pointer relative z-10" onClick={() => {navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert('Copied!')}} />
             <span className="text-[9px] font-mono text-slate-500 truncate flex-1 leading-none relative z-10">{DEPOSIT_ADDRESS}</span>
           </div>
         </div>
@@ -560,12 +504,12 @@ const RechargeView = ({ onDeposit, t }: any) => {
              <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.1em] italic">{t('paymentProof')}</p>
              <p className="text-[9px] text-slate-600 font-medium leading-relaxed">{t('paymentProofDesc')}</p>
            </div>
-           <div className="relative group rounded-[2rem] border-2 border-dashed border-white/10 hover:border-blue-500/50 transition-all bg-[#020617]/40 overflow-hidden haptic-click">
+           <div className="relative rounded-[2rem] border-2 border-dashed border-white/10 bg-[#020617]/40 overflow-hidden">
               <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
               <div className="p-10 flex flex-col items-center gap-4">
-                 <UploadCloud size={36} className="text-slate-800 group-hover:text-blue-500 transition-all duration-500 group-hover:-translate-y-1" />
+                 <UploadCloud size={36} className="text-slate-800" />
                  <div className="text-center space-y-1.5">
-                    <span className="text-xs font-black text-slate-500 group-hover:text-white block">{file ? file.name : t('clickToUpload')}</span>
+                    <span className="text-xs font-black text-slate-500 block">{file ? file.name : t('clickToUpload')}</span>
                     <span className="text-[9px] text-slate-800 uppercase font-black tracking-[0.2em]">{t('maxFileSize')}</span>
                  </div>
               </div>
@@ -575,7 +519,7 @@ const RechargeView = ({ onDeposit, t }: any) => {
         <button 
            onClick={() => onDeposit(Number(amount), file)}
            disabled={!amount || !file}
-           className="w-full bg-white text-black hover:bg-slate-200 disabled:bg-slate-900 disabled:text-slate-700 py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] transition-all shadow-lg active:scale-95 mt-1 haptic-click"
+           className="w-full bg-white text-black hover:bg-slate-200 disabled:bg-slate-900 disabled:text-slate-700 py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] active:scale-95 transition-all shadow-lg mt-1"
         >
           {t('confirmDeposit')}
         </button>
@@ -588,11 +532,10 @@ const WithdrawView = ({ user, onWithdraw, t }: any) => {
   const [amount, setAmount] = useState<string>('');
   const [wallet, setWallet] = useState<string>('');
   return (
-    <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-600">
+    <div className="space-y-8">
       <h2 className="text-xl font-black flex items-center gap-3 italic tracking-tighter uppercase"><ArrowUpCircle size={22} className="text-blue-500"/> {t('withdraw')}</h2>
       <div className="bg-[#0b0f1a] border border-white/10 p-8 rounded-[2.5rem] space-y-8 shadow-xl">
          <div className="bg-blue-600/5 border border-blue-500/10 rounded-[1.8rem] p-8 text-center shadow-inner relative overflow-hidden group">
-            <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100"></div>
             <p className="text-[9px] text-slate-600 font-black uppercase tracking-[0.3em] mb-3 italic relative z-10">{t('withdrawableBalance')}</p>
             <h3 className="text-4xl font-black text-blue-400 tracking-tighter relative z-10 drop-shadow-lg">{user.withdrawableBalance.toFixed(2)} <span className="text-[10px] font-black italic tracking-widest ml-1.5">USDT</span></h3>
          </div>
@@ -609,7 +552,7 @@ const WithdrawView = ({ user, onWithdraw, t }: any) => {
               <ShieldIcon size={16} className="text-red-400 shrink-0" />
               <p className="text-[9px] font-black text-red-400/80 uppercase tracking-wider italic leading-tight">{t('insufficientProfit')}</p>
             </div>
-            <button onClick={() => onWithdraw(Number(amount), wallet)} disabled={!amount || !wallet} className="w-full bg-blue-600 hover:bg-blue-500 py-5.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] shadow-lg transition-all active:scale-95 haptic-click">
+            <button onClick={() => onWithdraw(Number(amount), wallet)} disabled={!amount || !wallet} className="w-full bg-blue-600 hover:bg-blue-500 py-5.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] shadow-lg transition-all active:scale-95">
               {t('confirm')}
             </button>
          </div>
@@ -624,58 +567,34 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
   const getMachineStyle = (price: number) => {
     if (price < 100) return {
       card: "bg-[#0b0f1a] border-white/5",
-      glow: "opacity-[0.03]",
       icon: "text-blue-500",
       badge: "bg-blue-500/10 text-blue-500 border-blue-500/20",
       btn: "bg-white text-black hover:bg-slate-100",
-      aura: "",
       mainIcon: CpuIcon
     };
     if (price < 1000) return {
       card: "bg-gradient-to-br from-[#0b0f1a] to-[#064e3b] border-emerald-500/20",
-      glow: "opacity-[0.06]",
       icon: "text-emerald-400",
       badge: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
       btn: "bg-emerald-600 text-white hover:bg-emerald-500",
-      aura: "glow-institutional",
       mainIcon: Rocket
     };
-    if (price < 10000) return {
+    return {
       card: "bg-gradient-to-br from-[#0b0f1a] to-[#451a03] border-amber-500/30",
-      glow: "opacity-[0.10]",
       icon: "text-amber-500",
       badge: "bg-amber-500/20 text-amber-300 border-amber-500/40",
       btn: "bg-amber-500 text-black hover:bg-amber-400",
-      aura: "glow-titan shimmer",
       mainIcon: Gem
-    };
-    if (price < 100000) return {
-      card: "bg-gradient-to-br from-[#0b0f1a] to-[#450a0a] border-red-500/40",
-      glow: "opacity-[0.15]",
-      icon: "text-red-500",
-      badge: "bg-red-500/20 text-red-300 border-red-500/50",
-      btn: "bg-red-600 text-white hover:bg-red-500",
-      aura: "glow-mainframe shimmer",
-      mainIcon: Medal
-    };
-    return {
-      card: "bg-gradient-to-br from-[#020617] via-[#2e1065] to-[#020617] border-purple-500/50",
-      glow: "opacity-[0.20]",
-      icon: "text-purple-400",
-      badge: "bg-purple-500/30 text-purple-200 border-purple-500/50",
-      btn: "bg-white text-purple-900 hover:bg-purple-100 shadow-lg",
-      aura: "glow-galactic shimmer",
-      mainIcon: Crown
     };
   };
 
   return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-10 duration-600">
-      <div className="flex justify-between items-center px-1">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center px-1 text-right">
          <h2 className="text-lg font-black flex items-center gap-3 italic tracking-tighter uppercase">
            <Layers className="text-blue-500" size={18}/> {t('machines')}
          </h2>
-         <div className="flex items-center gap-2.5 bg-white/5 px-4 py-2 rounded-xl border border-white/5 shadow-md haptic-click">
+         <div className="flex items-center gap-2.5 bg-white/5 px-4 py-2 rounded-xl border border-white/5 shadow-md">
            <Diamond size={12} className="text-blue-400" />
            <span className="text-[9px] font-black text-slate-400 tracking-[0.15em] uppercase">{user.ownedMachines.length} / 3</span>
          </div>
@@ -688,37 +607,27 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
           const MIcon = styles.mainIcon;
           
           return (
-            <div key={m.id} className={`${styles.card} ${styles.aura} border rounded-[2rem] p-6 relative overflow-hidden group transition-all duration-700 shadow-xl backdrop-blur-2xl machine-card-hover ${loading ? 'animate-haptic' : ''}`}>
+            <div key={m.id} className={`${styles.card} border rounded-[2rem] p-6 relative overflow-hidden shadow-xl text-right`}>
               {loading && <div className="absolute inset-0 bg-slate-950/90 z-20 flex items-center justify-center backdrop-blur-md"><Loader2 className="animate-spin text-blue-500" size={32}/></div>}
               
-              <div className={`absolute top-0 right-0 p-6 ${styles.glow} scale-[1.5] rotate-12 pointer-events-none group-hover:scale-[1.7] transition-transform duration-1000`}>
-                <MIcon size={90} />
-              </div>
-
-              {/* Badges */}
-              <div className="flex flex-wrap gap-2 mb-4 relative z-10">
+              <div className="flex flex-wrap gap-2 mb-4 relative z-10 justify-end">
                 <span className={`px-3 py-1 rounded-full border text-[8px] font-black uppercase tracking-[0.1em] shadow-sm ${styles.badge}`}>
                   {m.price >= 100000 ? t('godMode') : m.price >= 10000 ? t('legendary') : m.price >= 1000 ? t('limited') : t('recommended')}
                 </span>
-                {m.price >= 500 && (
-                  <span className="bg-red-500/20 text-red-400 border border-red-500/30 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-[0.1em] flex items-center gap-1.5 shadow-sm pulse-soft">
-                    <Flame size={10} className="fill-red-500" /> High ROI
-                  </span>
-                )}
               </div>
 
-              <div className="flex justify-between items-start mb-6 relative z-10">
-                 <div className="flex gap-4">
-                    <div className="w-16 h-16 bg-black/40 rounded-xl flex items-center justify-center border border-white/10 shadow-inner group-hover:scale-110 transition-transform backdrop-blur-3xl haptic-click">
+              <div className="flex justify-between items-start mb-6 relative z-10 flex-row-reverse">
+                 <div className="flex gap-4 flex-row-reverse">
+                    <div className="w-16 h-16 bg-black/40 rounded-xl flex items-center justify-center border border-white/10">
                       <MIcon size={30} className={styles.icon} />
                     </div>
-                    <div className="space-y-1.5 text-right">
-                       <h3 className="font-black text-xl text-white uppercase italic tracking-tighter group-hover:translate-x-1 transition-transform drop-shadow-md">{m.name}</h3>
-                       <p className="text-[9px] text-slate-500 font-black uppercase tracking-[0.25em] italic opacity-60">Tier {Math.floor(m.price/100)} Purification Node</p>
+                    <div className="space-y-1.5">
+                       <h3 className="font-black text-xl text-white uppercase italic tracking-tighter">{m.name}</h3>
+                       <p className="text-[9px] text-slate-500 font-black uppercase tracking-[0.25em] italic opacity-60">Purification Node</p>
                     </div>
                  </div>
-                 <div className="text-right flex flex-col items-end">
-                    <p className={`text-3xl font-black ${m.price >= 10000 ? 'text-amber-500' : m.price >= 100000 ? 'text-purple-400' : 'text-blue-500'} tracking-tighter drop-shadow-lg`}>
+                 <div className="text-left flex flex-col items-start">
+                    <p className={`text-3xl font-black ${styles.icon} tracking-tighter`}>
                       {m.price >= 1000 ? `${(m.price/1000).toFixed(0)}K` : m.price}
                     </p>
                     <p className="text-[9px] text-slate-700 font-black uppercase tracking-[0.3em] mt-1 italic">USDT</p>
@@ -726,43 +635,32 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
               </div>
 
               <div className="grid grid-cols-2 gap-4 mb-6 relative z-10">
-                 <div className="bg-black/40 p-4 rounded-xl text-center border border-white/5 shadow-inner transition-colors backdrop-blur-xl">
+                 <div className="bg-black/40 p-4 rounded-xl text-center border border-white/5 shadow-inner">
                     <p className="text-[9px] text-slate-700 font-black mb-1.5 uppercase tracking-[0.1em] italic">{t('dailyProfit')}</p>
                     <p className={`text-2xl font-black ${styles.icon} tracking-tighter italic`}>
-                      +{m.dailyProfit >= 1000 ? (m.dailyProfit/1000).toFixed(1)+'K' : m.dailyProfit.toFixed(1)} 
+                      +{m.dailyProfit.toFixed(1)} 
                       <span className="text-[10px] opacity-20 ml-1.5 font-bold not-italic">USDT</span>
                     </p>
                  </div>
-                 <div className="bg-black/40 p-4 rounded-xl text-center border border-white/5 shadow-inner transition-colors backdrop-blur-xl">
+                 <div className="bg-black/40 p-4 rounded-xl text-center border border-white/5 shadow-inner">
                     <p className="text-[9px] text-slate-700 font-black mb-1.5 uppercase tracking-[0.1em] italic">{t('totalProfit')}</p>
                     <p className="text-2xl font-black text-white tracking-tighter italic">
-                      {(m.price * 2 >= 1000) ? ((m.price * 2)/1000).toFixed(0)+'K' : (m.price * 2).toFixed(0)} 
+                      {(m.price * 2).toFixed(0)} 
                       <span className="text-[10px] opacity-20 ml-1.5 font-bold not-italic">USDT</span>
                     </p>
                  </div>
-              </div>
-
-              <div className="flex items-center justify-between px-6 py-3 bg-white/5 rounded-xl mb-6 border border-white/10 relative z-10 shadow-md">
-                <div className="flex items-center gap-3">
-                  <Timer size={16} className="text-blue-400" />
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t('contractDuration')}</span>
-                </div>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-black text-white italic tracking-tighter">{m.duration}</span>
-                  <span className="text-[10px] font-black text-slate-700 uppercase">{t('days')}</span>
-                </div>
               </div>
 
               <button 
                 onClick={async () => {
                    setBuyingId(m.id);
+                   // Fix: Corrected function name from buyMachine to onBuy as passed in props.
                    await onBuy(m);
                    setBuyingId(null);
                 }}
                 disabled={owned || buyingId !== null}
-                className={`w-full py-5 rounded-[1.2rem] font-black text-[12px] uppercase tracking-[0.4em] transition-all shadow-xl relative z-10 overflow-hidden group/btn border-t border-white/10 ${owned ? 'bg-slate-900 text-slate-800' : styles.btn + ' haptic-click'}`}
+                className={`w-full py-5 rounded-[1.2rem] font-black text-[12px] uppercase tracking-[0.4em] shadow-xl relative z-10 overflow-hidden border-t border-white/10 ${owned ? 'bg-slate-900 text-slate-800' : styles.btn + ' active:scale-95'}`}
               >
-                {!owned && <div className="absolute inset-0 bg-white/5 opacity-0 group-hover/btn:opacity-100 transition-opacity shimmer"></div>}
                 {owned ? t('owned') : t('buyNow')}
               </button>
             </div>
@@ -784,10 +682,10 @@ const TasksView = ({ user, onComplete, t }: any) => {
   }, []);
 
   return (
-    <div className="space-y-8 animate-in slide-in-from-bottom-10 duration-600">
-      <h2 className="text-xl font-black flex items-center gap-3 italic tracking-tighter uppercase"><ListTodo className="text-blue-500" size={20}/> {t('tasks')}</h2>
+    <div className="space-y-8">
+      <h2 className="text-xl font-black flex items-center gap-3 italic tracking-tighter uppercase text-right"><ListTodo className="text-blue-500" size={20}/> {t('tasks')}</h2>
       {user.ownedMachines.length === 0 ? (
-        <div className="bg-white/5 border-2 border-dashed border-white/10 rounded-[2.5rem] p-24 text-center text-slate-800 font-black italic text-[11px] tracking-[0.5em] uppercase shadow-inner">SYSTEM IDLE - INITIATE NODE</div>
+        <div className="bg-white/5 border-2 border-dashed border-white/10 rounded-[2.5rem] p-24 text-center text-slate-800 font-black italic text-[11px] tracking-[0.5em] uppercase">لا توجد عقود نشطة حالياً</div>
       ) : (
         <div className="space-y-6">
           {user.ownedMachines.map((um: any) => {
@@ -796,44 +694,33 @@ const TasksView = ({ user, onComplete, t }: any) => {
             const loading = loadingId === um.id;
             if (!m) return null;
             return (
-              <div key={um.id} className={`bg-[#0b0f1a] border border-white/5 rounded-[2rem] p-6 relative overflow-hidden transition-all duration-700 shadow-xl ${done ? 'opacity-30 grayscale' : 'hover:border-blue-500/30'} ${loading ? 'animate-haptic' : ''}`}>
-                {loading && <div className="absolute inset-0 bg-slate-950/90 z-20 flex items-center justify-center backdrop-blur-md"><Loader2 className="animate-spin text-blue-500" size={32}/></div>}
+              <div key={um.id} className={`bg-[#0b0f1a] border border-white/5 rounded-[2rem] p-6 relative overflow-hidden shadow-xl text-right ${done ? 'opacity-30' : ''}`}>
+                {loading && <div className="absolute inset-0 bg-slate-950/90 z-20 flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={32}/></div>}
                 
-                <div className="flex justify-between items-center mb-4 relative z-10">
-                   <div className="flex gap-4 items-center">
-                      <div className={`w-14 h-14 rounded-2xl border flex items-center justify-center shadow-inner ${done ? 'bg-slate-900 border-slate-800' : 'bg-blue-600/10 border-blue-500/40 text-blue-500 animate-pulse'}`}><Clock size={26}/></div>
-                      <div className="space-y-1 text-right">
+                <div className="flex justify-between items-center mb-4 relative z-10 flex-row-reverse">
+                   <div className="flex gap-4 items-center flex-row-reverse">
+                      <div className={`w-14 h-14 rounded-2xl border flex items-center justify-center ${done ? 'bg-slate-900 border-slate-800' : 'bg-blue-600/10 border-blue-500/40 text-blue-500'}`}><Clock size={26}/></div>
+                      <div className="space-y-1">
                          <h4 className="font-black text-white italic uppercase tracking-tighter text-lg">{m.name}</h4>
                          <p className="text-[9px] text-slate-700 font-black uppercase tracking-[0.2em] italic mt-1.5">Authenticated Node</p>
                       </div>
                    </div>
-                   <div className="text-right">
+                   <div className="text-left">
                       <p className="text-2xl font-black text-emerald-400 tracking-tighter">+{m.dailyProfit.toFixed(1)}</p>
                       <p className="text-[10px] text-slate-800 font-black uppercase tracking-[0.3em] mt-1">USDT</p>
                    </div>
                 </div>
 
-                <div className="flex items-center justify-between px-6 py-3 bg-white/5 rounded-2xl mb-6 border border-white/5 relative z-10">
-                  <div className="flex items-center gap-3">
-                    <Timer size={16} className="text-blue-500" />
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t('contractDuration')}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl font-black text-white italic tracking-tighter">{um.remainingDays}</span>
-                    <span className="text-[10px] font-black text-slate-600 uppercase">{t('days')}</span>
-                  </div>
-                </div>
-
                 {done ? (
-                   <div className="bg-[#020617] py-4 px-8 rounded-xl text-center border border-white/5 shadow-inner relative z-10">
-                      <span className="text-[10px] text-slate-600 font-black uppercase tracking-[0.4em] italic">{t('nextTaskIn')}: <span className="text-blue-500 ml-4 font-mono text-sm not-italic drop-shadow-[0_0_10px_rgba(59,130,246,0.3)]">{countdown}</span></span>
+                   <div className="bg-[#020617] py-4 px-8 rounded-xl text-center border border-white/5 shadow-inner">
+                      <span className="text-[10px] text-slate-600 font-black uppercase tracking-[0.4em] italic">{t('nextTaskIn')}: <span className="text-blue-500 ml-4 font-mono text-sm not-italic">{countdown}</span></span>
                    </div>
                 ) : (
                    <button onClick={async () => {
                       setLoadingId(um.id);
                       await onComplete(um.id);
                       setLoadingId(null);
-                   }} className="w-full bg-[#1e293b] hover:bg-slate-800 py-4.5 rounded-xl font-black text-[11px] uppercase tracking-[0.4em] shadow-lg transition-all haptic-click relative z-10">
+                   }} className="w-full bg-[#1e293b] hover:bg-slate-800 py-4.5 rounded-xl font-black text-[11px] uppercase tracking-[0.4em] active:scale-95 transition-all">
                       {t('completeTask')}
                    </button>
                 )}
@@ -847,51 +734,48 @@ const TasksView = ({ user, onComplete, t }: any) => {
 };
 
 const TeamView = ({ user, t }: any) => (
-  <div className="space-y-10 animate-in slide-in-from-bottom-10 duration-600">
-    <h2 className="text-xl font-black flex items-center gap-4 italic tracking-tighter uppercase"><Users className="text-blue-500" size={22}/> {t('team')}</h2>
-    <div className="bg-[#0b0f1a] border border-white/5 rounded-[2.5rem] p-16 text-center space-y-4 shadow-xl relative overflow-hidden group">
-       <div className="absolute -inset-1 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[2.5rem] blur opacity-[0.05] transition-opacity duration-1000"></div>
-       <p className="text-slate-700 text-[11px] font-black uppercase tracking-[0.5em] relative z-10 italic">{t('referralEarnings')}</p>
-       <h3 className="text-7xl font-black text-blue-500 tracking-tighter relative z-10 italic drop-shadow-lg">{user.referralEarnings.toFixed(2)} <span className="text-sm text-slate-800 font-bold ml-2 uppercase not-italic tracking-[0.15em]">USDT</span></h3>
+  <div className="space-y-10">
+    <h2 className="text-xl font-black flex items-center gap-4 italic tracking-tighter uppercase text-right"><Users className="text-blue-500" size={22}/> {t('team')}</h2>
+    <div className="bg-[#0b0f1a] border border-white/5 rounded-[2.5rem] p-16 text-center space-y-4 shadow-xl">
+       <p className="text-slate-700 text-[11px] font-black uppercase tracking-[0.5em] italic">{t('referralEarnings')}</p>
+       <h3 className="text-7xl font-black text-blue-500 tracking-tighter italic">{user.referralEarnings.toFixed(2)} <span className="text-sm text-slate-800 font-bold ml-2 uppercase not-italic tracking-[0.15em]">USDT</span></h3>
     </div>
-    <div className="space-y-6">
+    <div className="space-y-6 text-right">
        <p className="text-[11px] text-slate-700 font-black uppercase px-8 tracking-[0.4em] italic">{t('referralLink')}</p>
-       <div className="bg-[#020617] border border-white/5 p-8 rounded-2xl flex items-center gap-7 group shadow-inner relative overflow-hidden border-t border-white/10">
-          <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100"></div>
-          <Copy size={24} className="text-blue-500 cursor-pointer haptic-click relative z-10" onClick={() => {navigator.clipboard.writeText('https://mine-pro.cc/ref/node_elite'); alert('Copied!')}}/>
-          <span className="text-sm font-mono text-slate-700 truncate flex-1 tracking-tight relative z-10">https://mine-pro.cc/ref/node_elite</span>
+       <div className="bg-[#020617] border border-white/5 p-8 rounded-2xl flex items-center gap-7">
+          <Copy size={24} className="text-blue-500 cursor-pointer active:scale-95" onClick={() => {navigator.clipboard.writeText('https://mine-pro.cc/ref/node_elite'); alert('Copied!')}}/>
+          <span className="text-sm font-mono text-slate-700 truncate flex-1 tracking-tight">https://mine-pro.cc/ref/node_elite</span>
        </div>
     </div>
   </div>
 );
 
 const ProfileView = ({ user, t }: any) => (
-  <div className="space-y-10 animate-in fade-in duration-1000">
-    <div className="flex items-center gap-10 p-8 bg-white/[0.02] border border-white/5 rounded-[3.5rem] shadow-2xl relative overflow-hidden group">
-       <div className="absolute -inset-1 bg-blue-600/5 blur opacity-0 group-hover:opacity-100 transition-opacity"></div>
-       <div className="w-24 h-24 rounded-[2rem] bg-gradient-to-br from-blue-600 via-indigo-700 to-blue-800 border-4 border-[#020617] shadow-xl flex items-center justify-center overflow-hidden group-hover:scale-105 transition-transform duration-700">
-          <img src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user.balance + 101}`} alt="Avatar" className="w-full h-full object-cover scale-110"/>
-       </div>
-       <div className="space-y-2.5 relative z-10 text-right">
-          <h3 className="text-3xl font-black italic tracking-tighter uppercase text-white drop-shadow-md">Node_Elite</h3>
-          <div className="inline-flex items-center gap-2.5 px-4 py-2 bg-blue-600/10 border border-blue-500/30 rounded-xl shadow-inner backdrop-blur-3xl">
+  <div className="space-y-10">
+    <div className="flex items-center gap-10 p-8 bg-white/[0.02] border border-white/5 rounded-[3.5rem] shadow-2xl justify-end">
+       <div className="space-y-2.5 text-right">
+          <h3 className="text-3xl font-black italic tracking-tighter uppercase text-white">Node_Elite</h3>
+          <div className="inline-flex items-center gap-2.5 px-4 py-2 bg-blue-600/10 border border-blue-500/30 rounded-xl">
              <ShieldCheck size={14} className="text-blue-500" />
              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500">Tier-1 Cloud Operator</span>
           </div>
        </div>
+       <div className="w-24 h-24 rounded-[2rem] bg-gradient-to-br from-blue-600 via-indigo-700 to-blue-800 border-4 border-[#020617] shadow-xl flex items-center justify-center overflow-hidden">
+          <img src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user.balance + 101}`} alt="Avatar" className="w-full h-full object-cover"/>
+       </div>
     </div>
     
-    <div className="bg-[#0b0f1a] border border-white/5 rounded-[3.5rem] overflow-hidden shadow-2xl border-t border-white/10">
-       <div className="p-8 border-b border-white/5 font-black text-[11px] uppercase tracking-[0.4em] flex items-center gap-5 text-slate-600 italic">
+    <div className="bg-[#0b0f1a] border border-white/5 rounded-[3.5rem] overflow-hidden shadow-2xl">
+       <div className="p-8 border-b border-white/5 font-black text-[11px] uppercase tracking-[0.4em] flex items-center gap-5 text-slate-600 italic flex-row-reverse">
           <History size={24} className="text-blue-500"/> {t('history')}
        </div>
        <div className="divide-y divide-white/[0.03] max-h-[450px] overflow-y-auto no-scrollbar">
           {user.transactions.length === 0 ? (
-             <div className="p-24 text-center text-slate-800 text-[11px] font-black italic uppercase tracking-[0.7em] opacity-40">LEDGER SECURED - NO ACTIVITY</div>
+             <div className="p-24 text-center text-slate-800 text-[11px] font-black italic uppercase tracking-[0.7em] opacity-40">لا توجد سجلات حالية</div>
           ) : user.transactions.map((tx: any) => (
-             <div key={tx.id} className="p-8 flex justify-between items-center hover:bg-white/[0.02] transition-all duration-500 group">
-                <div className="flex gap-8 items-center">
-                   <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border shadow-inner transition-transform group-hover:scale-110 ${tx.type === 'deposit' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-blue-500/10 border-blue-500/20 text-blue-500'}`}>
+             <div key={tx.id} className="p-8 flex justify-between items-center flex-row-reverse">
+                <div className="flex gap-8 items-center flex-row-reverse">
+                   <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border shadow-inner ${tx.type === 'deposit' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-blue-500/10 border-blue-500/20 text-blue-500'}`}>
                       {tx.type === 'deposit' ? <ArrowDownCircle size={28}/> : <ArrowUpCircle size={28}/>}
                    </div>
                    <div className="space-y-1.5 text-right">
@@ -899,7 +783,7 @@ const ProfileView = ({ user, t }: any) => (
                       <p className="text-[10px] text-slate-800 font-black uppercase tracking-[0.3em]">{new Date(tx.date).toLocaleDateString()}</p>
                    </div>
                 </div>
-                <div className="text-right space-y-1.5">
+                <div className="text-left space-y-1.5">
                    <p className={`text-2xl font-black tracking-tighter ${tx.type === 'withdrawal' ? 'text-red-400' : 'text-emerald-400'}`}>{tx.type === 'withdrawal' ? '-' : '+'}{tx.amount.toFixed(2)}</p>
                    <p className="text-[9px] font-black uppercase tracking-[0.5em] text-slate-900">{tx.status}</p>
                 </div>
