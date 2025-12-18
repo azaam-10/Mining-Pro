@@ -71,5 +71,8 @@ export const TRANSLATIONS: Translations = {
     en: "Our platform acts as a secure intermediary for asset purification.",
     ar: "تعمل منصتنا كوسيط آمن لتنقية الأصول. معلوماتك مشفرة بنسبة 100٪ وغير مرئية لأي جهاز." 
   },
-  clickToUpload: { en: "Upload Transfer Proof", ar: "رفع إثبات التحويل" }
+  clickToUpload: { en: "Upload Transfer Proof", ar: "رفع إثبات التحويل" },
+  supportChat: { en: "Support Chat", ar: "الدردشة مع الدعم" },
+  send: { en: "Send", ar: "إرسال" },
+  typeMessage: { en: "Type your message...", ar: "اكتب رسالتك هنا..." }
 };

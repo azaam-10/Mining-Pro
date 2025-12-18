@@ -16,7 +16,7 @@ export interface UserMachine {
   last_claim_date: string | null;
   total_earned: number;
   remaining_days: number;
-  user_id?: string; // Added for admin view
+  user_id?: string;
 }
 
 export interface Transaction {
@@ -27,7 +27,17 @@ export interface Transaction {
   status: 'pending' | 'completed' | 'failed';
   date: string;
   details?: string;
-  proof_url?: string; // For deposit evidence
+  proof_url?: string;
+}
+
+export interface SupportMessage {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+  sender_email?: string; // Virtual field
 }
 
 export interface UserState {
@@ -36,18 +46,15 @@ export interface UserState {
   last_name: string;
   email: string;
   balance: number;
-  withdrawable_balance: number; // Use exact DB field name
-  withdrawableBalance: number; // For app state
-  total_recharge: number;
+  withdrawableBalance: number;
   totalRecharge: number;
-  total_withdraw: number;
   totalWithdraw: number;
-  referral_earnings: number;
   referralEarnings: number;
   referral_code: string;
   ownedMachines: UserMachine[];
   transactions: Transaction[];
   lastWithdrawDate: string | null;
+  created_at: string;
 }
 
 export interface Translations {
