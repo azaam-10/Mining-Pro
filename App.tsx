@@ -10,7 +10,8 @@ import {
   Database, BarChart3, Crown, Info, Layers, 
   Star, Timer, Gem, Flame, Rocket, ShieldAlert, 
   Diamond, Medal, ShieldAlert as ShieldIcon,
-  LogOut, Mail, Key, UserPlus, Settings, Eye, Search, RefreshCw
+  LogOut, Mail, Key, UserPlus, Settings, Eye, Search, RefreshCw,
+  Calendar, CreditCard, ChevronLeft
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, NETWORK, MIN_WITHDRAWAL, ADMIN_EMAIL } from './constants';
@@ -236,23 +237,29 @@ const AdminView = ({ t, showToast }: any) => {
   const [machines, setMachines] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'users' | 'deposits' | 'withdrawals'>('users');
+  const [subTab, setSubTab] = useState<'pending' | 'resolved'>('pending');
   const [selectedUser, setSelectedUser] = useState<any>(null);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       const { data: userData, error: userErr } = await supabase.from('profiles').select('*');
-      const { data: txData, error: txErr } = await supabase.from('transactions').select('*, profiles(first_name, last_name, email, id)').order('date', { ascending: false });
+      const { data: txData, error: txErr } = await supabase.from('transactions').select('*').order('date', { ascending: false });
       const { data: machineData, error: machErr } = await supabase.from('user_machines').select('*');
       
-      if (userErr) console.error("Profiles error:", userErr);
-      if (txErr) console.error("Transactions error:", txErr);
+      if (userErr) throw userErr;
+      if (txErr) throw txErr;
       
+      const mergedTxs = txData?.map(tx => ({
+        ...tx,
+        profiles: userData?.find(u => u.id === tx.user_id) || { first_name: 'Unknown', last_name: 'User', email: 'N/A' }
+      })) || [];
+
       if (userData) setUsers(userData);
-      if (txData) setTxs(txData);
+      if (txData) setTxs(mergedTxs);
       if (machineData) setMachines(machineData);
-    } catch (e) {
-      showToast("Error fetching admin data", "error");
+    } catch (e: any) {
+      showToast(e.message || "Error fetching admin data", "error");
     } finally {
       setLoading(false);
     }
@@ -262,7 +269,7 @@ const AdminView = ({ t, showToast }: any) => {
 
   const handleAction = async (tx: any, newStatus: 'completed' | 'failed') => {
     const user = users.find(u => u.id === tx.user_id);
-    if (!user) return showToast("User not found for this transaction", "error");
+    if (!user) return showToast("User not found", "error");
 
     if (tx.type === 'deposit' && newStatus === 'completed') {
       const newBalance = (user.balance || 0) + tx.amount;
@@ -296,7 +303,7 @@ const AdminView = ({ t, showToast }: any) => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex justify-between items-center mb-2 px-1">
-         <h2 className="text-xl font-black italic text-white uppercase tracking-tighter">نظام التحكم</h2>
+         <h2 className="text-xl font-black italic text-white uppercase tracking-tighter">مركز الإدارة</h2>
          <button onClick={fetchData} className="p-2 bg-white/5 rounded-xl text-blue-500 hover:rotate-180 transition-all duration-500"><RefreshCw size={20}/></button>
       </div>
 
@@ -306,75 +313,117 @@ const AdminView = ({ t, showToast }: any) => {
         <button onClick={() => {setTab('withdrawals'); setSelectedUser(null);}} className={`flex-1 py-3 rounded-lg font-black text-[10px] uppercase transition-all ${tab === 'withdrawals' ? 'bg-blue-600 shadow-lg text-white' : 'text-slate-500'}`}>السحوبات</button>
       </div>
 
+      {tab !== 'users' && !selectedUser && (
+        <div className="flex justify-center gap-4 bg-[#020617] p-1 rounded-2xl border border-white/5 mx-auto max-w-[250px]">
+           <button onClick={() => setSubTab('pending')} className={`flex-1 py-2 px-4 rounded-xl text-[9px] font-black uppercase transition-all ${subTab === 'pending' ? 'bg-yellow-500/10 text-yellow-500' : 'text-slate-600'}`}>قيد الانتظار</button>
+           <button onClick={() => setSubTab('resolved')} className={`flex-1 py-2 px-4 rounded-xl text-[9px] font-black uppercase transition-all ${subTab === 'resolved' ? 'bg-emerald-500/10 text-emerald-500' : 'text-slate-600'}`}>السجل (المحلولة)</button>
+        </div>
+      )}
+
       {tab === 'users' && !selectedUser && (
         <div className="space-y-4">
           <div className="relative">
             <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-            <input placeholder="البحث عن مستخدم..." className="w-full bg-[#0b0f1a] border border-white/5 pr-12 pl-4 py-4 rounded-2xl text-xs text-white outline-none focus:border-blue-500/30" />
+            <input placeholder="البحث برقم المعرف أو البريد..." className="w-full bg-[#0b0f1a] border border-white/5 pr-12 pl-4 py-4 rounded-2xl text-xs text-white outline-none focus:border-blue-500/30" />
           </div>
           {users.map(u => (
-            <div key={u.id} className="bg-[#0b0f1a] border border-white/10 p-5 rounded-[2rem] flex justify-between items-center flex-row-reverse group hover:border-blue-500/50 transition-all">
+            <div key={u.id} onClick={() => setSelectedUser(u)} className="bg-[#0b0f1a] border border-white/10 p-5 rounded-[2rem] flex justify-between items-center flex-row-reverse group hover:border-blue-500/50 transition-all cursor-pointer">
               <div className="text-right">
                 <h4 className="font-black text-white italic">{u.first_name} {u.last_name}</h4>
                 <p className="text-[10px] text-slate-500 font-mono">{u.email}</p>
               </div>
-              <button onClick={() => setSelectedUser(u)} className="p-3 bg-white/5 rounded-xl text-blue-500 hover:bg-blue-600 hover:text-white transition-all"><Eye size={18} /></button>
+              <div className="flex flex-col items-start">
+                 <span className="text-blue-500 text-xs font-black italic">{u.balance.toFixed(2)} USDT</span>
+                 <span className="text-[8px] text-slate-700 uppercase font-bold">Total Assets</span>
+              </div>
             </div>
           ))}
-          {users.length === 0 && <p className="text-center text-slate-500 italic py-10">لا يوجد مستخدمين مسجلين</p>}
         </div>
       )}
 
-      {selectedUser && tab === 'users' && (
-        <div className="space-y-6 animate-in slide-in-from-right duration-300">
-           <button onClick={() => setSelectedUser(null)} className="flex items-center gap-2 text-blue-500 font-black text-[10px] uppercase mb-4">
-             <ArrowRight size={14} /> العودة للقائمة
+      {selectedUser && (
+        <div className="space-y-6 animate-in slide-in-from-right duration-500 pb-10">
+           <button onClick={() => setSelectedUser(null)} className="flex items-center gap-2 text-blue-500 font-black text-[10px] uppercase mb-4 bg-white/5 px-4 py-2 rounded-full">
+             <ChevronLeft size={14} /> العودة للرئيسية
            </button>
-           <div className="bg-[#0b0f1a] border border-white/10 p-8 rounded-[3rem] text-right space-y-6">
-              <div className="flex justify-between items-center flex-row-reverse border-b border-white/5 pb-4">
-                <span className="text-slate-500 text-[10px] font-black uppercase">الرصيد الكلي</span>
-                <span className="text-white font-black text-xl italic">{selectedUser.balance} USDT</span>
+           
+           <div className="bg-[#0b0f1a] border border-white/10 rounded-[3rem] p-8 text-right space-y-8 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-32 h-32 bg-blue-600/5 blur-3xl rounded-full"></div>
+              
+              <div className="flex items-center gap-6 flex-row-reverse relative z-10 border-b border-white/5 pb-8">
+                 <div className="w-20 h-20 rounded-3xl bg-blue-600/20 border-4 border-blue-600/10 flex items-center justify-center">
+                    <img src={`https://api.dicebear.com/7.x/bottts/svg?seed=${selectedUser.id}`} alt="User" className="w-14 h-14"/>
+                 </div>
+                 <div className="flex-1">
+                    <h3 className="text-2xl font-black text-white italic">{selectedUser.first_name} {selectedUser.last_name}</h3>
+                    <p className="text-[10px] text-slate-500 font-mono">{selectedUser.email}</p>
+                    <div className="flex items-center gap-2 flex-row-reverse mt-2">
+                       <Calendar size={12} className="text-slate-700" />
+                       <span className="text-[9px] text-slate-700 uppercase font-black">انضم في: {new Date(selectedUser.created_at).toLocaleDateString()}</span>
+                    </div>
+                 </div>
               </div>
-              <div className="flex justify-between items-center flex-row-reverse border-b border-white/5 pb-4">
-                <span className="text-slate-500 text-[10px] font-black uppercase">قابل للسحب</span>
-                <span className="text-blue-500 font-black text-xl italic">{selectedUser.withdrawable_balance} USDT</span>
+
+              <div className="grid grid-cols-2 gap-4 relative z-10">
+                 <StatBox label="الرصيد الكلي" value={selectedUser.balance} color="white" />
+                 <StatBox label="قابل للسحب" value={selectedUser.withdrawable_balance} color="blue-500" />
+                 <StatBox label="إجمالي الإيداع" value={selectedUser.total_recharge} color="emerald-500" />
+                 <StatBox label="إجمالي السحب" value={selectedUser.total_withdraw} color="red-500" />
               </div>
-              <div className="space-y-4 pt-4">
-                 <p className="text-[10px] font-black uppercase text-slate-500">الماكينات النشطة ({machines.filter(m => m.user_id === selectedUser.id).length})</p>
-                 {machines.filter(m => m.user_id === selectedUser.id).map(um => {
-                   const machine = MACHINES.find(x => x.id === um.machine_id);
-                   return (
-                     <div key={um.id} className="bg-white/5 p-4 rounded-2xl flex justify-between flex-row-reverse text-right items-center">
-                        <div className="flex flex-col">
-                           <span className="text-white font-black text-xs italic">{machine?.name}</span>
-                           <span className="text-[8px] text-slate-600">ID: {um.id}</span>
-                        </div>
-                        <span className="text-emerald-500 text-[10px] font-bold">باقي {um.remaining_days} يوم</span>
+
+              <div className="space-y-4 pt-6 relative z-10">
+                 <div className="flex justify-between items-center flex-row-reverse">
+                    <p className="text-[10px] font-black uppercase text-slate-500">الماكينات المملوكة</p>
+                    <span className="bg-white/5 px-3 py-1 rounded-lg text-[10px] font-black text-white">{machines.filter(m => m.user_id === selectedUser.id).length}</span>
+                 </div>
+                 <div className="space-y-3">
+                   {machines.filter(m => m.user_id === selectedUser.id).map(um => {
+                     const machine = MACHINES.find(x => x.id === um.machine_id);
+                     return (
+                       <div key={um.id} className="bg-black/20 border border-white/5 p-4 rounded-2xl flex justify-between flex-row-reverse items-center">
+                          <div className="text-right">
+                             <p className="text-[11px] font-black text-white italic">{machine?.name}</p>
+                             <p className="text-[8px] text-slate-600">Purchase: {new Date(um.purchase_date).toLocaleDateString()}</p>
+                          </div>
+                          <div className="bg-blue-600/10 px-3 py-1 rounded-full"><span className="text-[9px] font-black text-blue-500">باقي {um.remaining_days} يوم</span></div>
+                       </div>
+                     );
+                   })}
+                 </div>
+              </div>
+
+              <div className="pt-6 relative z-10">
+                 <p className="text-[10px] font-black uppercase text-slate-500 mb-4">آخر العمليات</p>
+                 <div className="space-y-2">
+                   {txs.filter(tx => tx.user_id === selectedUser.id).slice(0, 5).map(tx => (
+                     <div key={tx.id} className="flex justify-between items-center bg-white/[0.02] p-3 rounded-xl flex-row-reverse">
+                        <span className={`text-[9px] font-black uppercase ${tx.amount > 0 ? 'text-emerald-500' : 'text-red-500'}`}>{tx.type}</span>
+                        <span className="text-[10px] font-black text-white italic">{tx.amount.toFixed(2)} USDT</span>
                      </div>
-                   );
-                 })}
-                 {machines.filter(m => m.user_id === selectedUser.id).length === 0 && (
-                   <p className="text-[10px] text-slate-700 italic">لا يملك أي ماكينات حالياً</p>
-                 )}
+                   ))}
+                 </div>
               </div>
            </div>
         </div>
       )}
 
-      {(tab === 'deposits' || tab === 'withdrawals') && (
+      {(tab === 'deposits' || tab === 'withdrawals') && !selectedUser && (
         <div className="space-y-6">
-          {txs.filter(t => t.type === (tab === 'deposits' ? 'deposit' : 'withdrawal')).map(t => (
-            <div key={t.id} className={`bg-[#0b0f1a] border ${t.status === 'pending' ? 'border-yellow-500/30 shadow-[0_0_20px_rgba(234,179,8,0.05)]' : 'border-white/10'} p-6 rounded-[2.5rem] text-right space-y-4 transition-all`}>
+          {txs.filter(t => 
+            t.type === (tab === 'deposits' ? 'deposit' : 'withdrawal') && 
+            (subTab === 'pending' ? t.status === 'pending' : t.status !== 'pending')
+          ).map(t => (
+            <div key={t.id} className={`bg-[#0b0f1a] border ${t.status === 'pending' ? 'border-yellow-500/30' : 'border-white/10 opacity-70'} p-6 rounded-[2.5rem] text-right space-y-4`}>
               <div className="flex justify-between items-center flex-row-reverse">
-                 <div className="text-right">
-                   <h5 className="font-black text-white italic text-sm">{t.profiles?.first_name || 'Guest'} {t.profiles?.last_name || ''}</h5>
-                   <p className="text-[10px] text-slate-600 font-mono">{t.profiles?.email || 'No Email'}</p>
+                 <div className="text-right cursor-pointer" onClick={() => setSelectedUser(t.profiles)}>
+                   <h5 className="font-black text-white italic text-sm hover:text-blue-500 transition-colors underline decoration-blue-500/30">{t.profiles?.first_name} {t.profiles?.last_name}</h5>
+                   <p className="text-[10px] text-slate-600 font-mono">{t.profiles?.email}</p>
                  </div>
                  <span className={`text-[9px] font-black uppercase px-3 py-1 rounded-full border ${
                    t.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 
                    t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
                    'bg-red-500/10 text-red-500 border-red-500/20'
-                 }`}>{t.status === 'pending' ? 'بانتظارك' : t.status}</span>
+                 }`}>{t.status === 'pending' ? 'معلقة' : t.status === 'completed' ? 'تمت بنجاح' : 'مرفوضة'}</span>
               </div>
               
               <div className="flex justify-between flex-row-reverse items-baseline border-t border-white/5 pt-3">
@@ -383,31 +432,29 @@ const AdminView = ({ t, showToast }: any) => {
               </div>
               
               {t.proof_url && (
-                <div className="mt-4 rounded-[1.5rem] overflow-hidden border border-white/10 group relative bg-black/40">
+                <div className="mt-2 rounded-2xl overflow-hidden border border-white/10 group relative bg-black">
                    <img 
                     src={t.proof_url} 
                     alt="Proof" 
-                    className="w-full h-auto max-h-72 object-contain group-hover:scale-105 transition-transform duration-500 cursor-zoom-in" 
+                    className="w-full h-auto max-h-48 object-contain cursor-zoom-in" 
                     onClick={() => window.open(t.proof_url, '_blank')}
                    />
-                   <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-                      <p className="text-[9px] text-white font-bold italic">صورة إثبات التحويل (اضغط للتكبير)</p>
-                   </div>
                 </div>
               )}
 
-              {t.details && !t.proof_url && <p className="text-[10px] bg-white/5 p-3 rounded-xl text-slate-400 font-mono leading-relaxed">{t.details}</p>}
-              
               {t.status === 'pending' && (
                 <div className="flex gap-4 pt-2">
-                  <button onClick={() => handleAction(t, 'completed')} className="flex-1 bg-emerald-600 text-white font-black py-4 rounded-2xl text-[11px] uppercase shadow-lg shadow-emerald-500/10 active:scale-95 transition-all">قبول العملية</button>
-                  <button onClick={() => handleAction(t, 'failed')} className="flex-1 bg-red-600 text-white font-black py-4 rounded-2xl text-[11px] uppercase shadow-lg shadow-red-500/10 active:scale-95 transition-all">رفض</button>
+                  <button onClick={() => handleAction(t, 'completed')} className="flex-1 bg-emerald-600 text-white font-black py-4 rounded-2xl text-[11px] uppercase active:scale-95 transition-all">قبول</button>
+                  <button onClick={() => handleAction(t, 'failed')} className="flex-1 bg-red-600 text-white font-black py-4 rounded-2xl text-[11px] uppercase active:scale-95 transition-all">رفض</button>
                 </div>
               )}
             </div>
           ))}
-          {txs.filter(t => t.type === (tab === 'deposits' ? 'deposit' : 'withdrawal')).length === 0 && (
-            <div className="py-20 text-center opacity-20 font-black italic uppercase tracking-[0.3em] text-slate-500">لا يوجد عمليات لعرضها حالياً</div>
+          {txs.filter(t => 
+            t.type === (tab === 'deposits' ? 'deposit' : 'withdrawal') && 
+            (subTab === 'pending' ? t.status === 'pending' : t.status !== 'pending')
+          ).length === 0 && (
+            <div className="py-20 text-center opacity-20 font-black italic uppercase tracking-[0.3em] text-slate-500">لا يوجد بيانات هنا حالياً</div>
           )}
         </div>
       )}
@@ -415,8 +462,14 @@ const AdminView = ({ t, showToast }: any) => {
   );
 };
 
-// --- المكونات الأخرى (HomeView, RechargeModal, إلخ) تظل كما هي مع التأكد من تمرير lang لـ RechargeModal ---
+const StatBox = ({ label, value, color }: any) => (
+  <div className="bg-black/40 border border-white/5 p-4 rounded-2xl text-right">
+     <p className="text-[8px] font-black uppercase text-slate-600 italic mb-1">{label}</p>
+     <p className={`text-lg font-black text-${color} italic tracking-tighter`}>{value.toFixed(2)} <span className="text-[8px]">USDT</span></p>
+  </div>
+);
 
+// --- بقية المكونات تظل كما هي ---
 const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw }: any) => {
   return (
     <div className="space-y-10">
@@ -539,7 +592,7 @@ const RechargeModal = ({ t, lang, onClose, onDeposit, showToast }: any) => {
           <button 
             onClick={() => onDeposit(Number(rechargeAmount), image)} 
             disabled={!image || !rechargeAmount || uploading}
-            className="w-full bg-white text-black font-black py-5 rounded-[1.5rem] uppercase tracking-[0.4em] text-[12px] shadow-xl disabled:opacity-20 transition-all hover:bg-slate-100 active:scale-[0.98]"
+            className="w-full bg-white text-black font-black py-5 rounded-[1.5rem] uppercase tracking-[0.4em] text-[12px] shadow-xl disabled:opacity-20 transition-all hover:bg-slate-100 active:scale-[0.98] uppercase"
           >
             {t('confirmDeposit')}
           </button>
