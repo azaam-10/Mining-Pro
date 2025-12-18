@@ -20,7 +20,6 @@ const App: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // تحديد اللغة تلقائياً بناءً على لغة الهاتف/المتصفح
   const [lang, setLang] = useState<Language>(() => {
     const browserLang = navigator.language.split('-')[0];
     return browserLang === 'ar' ? 'ar' : 'en';
@@ -767,16 +766,33 @@ const AdminView = ({ t, showToast, lang }: any) => {
     if (!user) return;
     
     try {
+      // Logic for Deposit completion
       if (tx.type === 'deposit' && newStatus === 'completed') {
-        await supabase.from('profiles').update({ balance: user.balance + tx.amount, total_recharge: (user.total_recharge || 0) + tx.amount }).eq('id', tx.user_id);
+        await supabase.from('profiles').update({ 
+          balance: user.balance + tx.amount, 
+          total_recharge: (user.total_recharge || 0) + tx.amount 
+        }).eq('id', tx.user_id);
       }
+      
+      // Logic for Withdrawal rejection (REFUND)
       if (tx.type === 'withdrawal' && newStatus === 'failed') {
-         await supabase.from('profiles').update({ balance: user.balance + Math.abs(tx.amount), withdrawable_balance: (user.withdrawable_balance || 0) + Math.abs(tx.amount) }).eq('id', tx.user_id);
+         await supabase.from('profiles').update({ 
+           balance: user.balance + Math.abs(tx.amount), 
+           withdrawable_balance: (user.withdrawable_balance || 0) + Math.abs(tx.amount) 
+         }).eq('id', tx.user_id);
       }
+
+      // Logic for Withdrawal completion (UPDATE TOTAL WITHDRAW)
+      if (tx.type === 'withdrawal' && newStatus === 'completed') {
+        await supabase.from('profiles').update({
+          total_withdraw: (user.total_withdraw || 0) + Math.abs(tx.amount)
+        }).eq('id', tx.user_id);
+      }
+
       await supabase.from('transactions').update({ status: newStatus }).eq('id', tx.id);
       fetchData();
-      if (selectedUserId === tx.user_id) fetchUserDetails(tx.user_id); // Refresh modal if open
-      showToast(lang === 'ar' ? `تم تحديث حالة المعاملة` : `Transaction status updated`, 'success');
+      if (selectedUserId === tx.user_id) fetchUserDetails(tx.user_id); 
+      showToast(lang === 'ar' ? `تم تحديث حالة المعاملة بنجاح` : `Transaction status updated`, 'success');
     } catch (e) {
       showToast(lang === 'ar' ? "فشل تحديث المعاملة" : "Transaction update failed", "error");
     }
@@ -1139,7 +1155,18 @@ const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast
     
     try {
       const nowISO = new Date().toISOString();
-      await supabase.from('transactions').insert({ 
+      
+      // Update the user balance in profiles table immediately
+      const { error: profileError } = await supabase.from('profiles').update({ 
+        balance: balance - amt, 
+        withdrawable_balance: max - amt,
+        last_withdraw_date: nowISO
+      }).eq('id', userId);
+
+      if (profileError) throw profileError;
+
+      // Log the transaction
+      const { error: txError } = await supabase.from('transactions').insert({ 
         user_id: userId, 
         type: 'withdrawal', 
         amount: -amt, 
@@ -1147,16 +1174,14 @@ const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast
         details: `Address: ${address}`,
         date: nowISO
       });
-      await supabase.from('profiles').update({ 
-        balance: balance - amt, 
-        withdrawable_balance: max - amt,
-        last_withdraw_date: nowISO
-      }).eq('id', userId);
+
+      if (txError) throw txError;
       
       onWithdraw(); 
       onClose(); 
       showToast(lang === 'ar' ? "تم إرسال طلب تسييل الأصول بنجاح" : "Withdrawal request submitted", 'success');
-    } catch (e) {
+    } catch (e: any) {
+      console.error(e);
       showToast(lang === 'ar' ? "فشل في معالجة طلب السحب" : "Withdrawal error", "error");
     } finally {
       setInternalLoading(false);
