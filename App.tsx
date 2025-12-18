@@ -1017,20 +1017,26 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId, setIsProcessi
 
         <div className="space-y-4">
            <input type="number" placeholder={lang === 'ar' ? "أدخل المبلغ المودع (USDT)" : "Deposit Amount (USDT)"} value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center text-xl outline-none focus:border-blue-500/40" />
-           <label className="block border-2 border-dashed border-white/10 rounded-xl p-6 text-center bg-white/5 cursor-pointer hover:border-blue-500/20 transition-all">
-              <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
-              {image ? (
-                <div className="space-y-2">
-                  <img src={image} className="w-16 h-16 mx-auto rounded-lg object-cover border border-white/10" />
-                  <p className="text-[9px] text-emerald-500 font-black">{lang === 'ar' ? 'تم اختيار الصورة' : 'Image Selected'}</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                   <UploadCloud size={32} className="mx-auto text-blue-500 opacity-60" />
-                   <p className="text-[9px] text-slate-600 font-bold">{lang === 'ar' ? 'اضغط لرفع لقطة شاشة لإثبات الإيداع' : 'Click to upload proof of deposit'}</p>
-                </div>
-              )}
-           </label>
+           
+           <div className="space-y-2">
+             <p className={`text-[10px] text-slate-500 font-black uppercase tracking-widest px-1 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
+               {lang === 'ar' ? 'خطوة هامة: أرفق صورة وصل التحويل أدناه' : 'Critical Step: Attach transfer proof below'}
+             </p>
+             <label className="block border-2 border-dashed border-white/10 rounded-xl p-6 text-center bg-white/5 cursor-pointer hover:border-blue-500/20 transition-all">
+                <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                {image ? (
+                  <div className="space-y-2">
+                    <img src={image} className="w-16 h-16 mx-auto rounded-lg object-cover border border-white/10" />
+                    <p className="text-[9px] text-emerald-500 font-black">{lang === 'ar' ? 'تم اختيار الصورة' : 'Image Selected'}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                     <UploadCloud size={32} className="mx-auto text-blue-500 opacity-60" />
+                     <p className="text-[9px] text-slate-600 font-bold">{lang === 'ar' ? 'اضغط لرفع لقطة شاشة لإثبات الإيداع' : 'Click to upload proof of deposit'}</p>
+                  </div>
+                )}
+             </label>
+           </div>
         </div>
 
         {localError && (
