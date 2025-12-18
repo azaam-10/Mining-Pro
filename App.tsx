@@ -27,28 +27,33 @@ const App: React.FC = () => {
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [session, setSession] = useState<any>(null);
   const [userData, setUserData] = useState<UserState | null>(null);
 
-  const fetchAllUserData = async (userId: string) => {
+  const fetchAllUserData = async (userId: string, isManual: boolean = false) => {
+    if (isManual) setSyncing(true);
     try {
       const { data: profile, error: profileErr } = await supabase.from('profiles').select('*').eq('id', userId).single();
       
-      if (profileErr && profileErr.code === 'PGRST116') {
+      if (profileErr && (profileErr.code === 'PGRST116' || profileErr.code === '42P01')) {
+        // إذا لم يوجد بروفايل، نقوم بإنشائه
         const { data: newProfile } = await supabase.from('profiles').insert([
           { id: userId, balance: 0, withdrawable_balance: 0, referral_code: Math.random().toString(36).substring(2, 8).toUpperCase() }
         ]).select().single();
         if (newProfile) setUserData(formatUserData(newProfile, [], []));
       } else if (profile) {
-        const { data: machines } = await supabase.from('user_machines').select('*').eq('id', userId); // corrected potential mismatch
         const { data: actualMachines } = await supabase.from('user_machines').select('*').eq('user_id', userId);
         const { data: txs } = await supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false });
         setUserData(formatUserData(profile, actualMachines || [], txs || []));
       }
+      if (isManual) showToast("تم تحديث البيانات بنجاح", "success");
     } catch (err) {
       console.error("Data Fetch Error:", err);
+      if (isManual) showToast("فشل تحديث البيانات، تحقق من الاتصال", "error");
     } finally {
       setLoading(false);
+      setSyncing(false);
     }
   };
 
@@ -92,6 +97,12 @@ const App: React.FC = () => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const handleManualRefresh = () => {
+    if (session) {
+      fetchAllUserData(session.user.id, true);
+    }
+  };
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now();
@@ -154,6 +165,7 @@ const App: React.FC = () => {
   );
 
   if (!session) return <AuthView lang={lang} setLang={setLang} t={t} showToast={showToast} />;
+  
   if (!userData) return (
     <div className="min-h-screen bg-[#020617] flex items-center justify-center p-10 text-center">
       <div className="space-y-4">
@@ -183,7 +195,14 @@ const App: React.FC = () => {
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg"><Zap size={18} className="text-white fill-white" /></div>
           <span className="font-black italic text-lg tracking-tighter uppercase">MINE<span className="text-blue-500">PRO</span></span>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 items-center">
+          <button 
+            onClick={handleManualRefresh} 
+            disabled={syncing}
+            className={`p-2 bg-white/5 text-blue-400 rounded-xl active:bg-white/10 transition-all ${syncing ? 'animate-spin opacity-50' : ''}`}
+          >
+             <RefreshCw size={18} />
+          </button>
           <button onClick={() => setShowSupport(true)} className="p-2 bg-blue-500/10 text-blue-500 rounded-xl relative">
              <MessageCircle size={18} />
              <div className="absolute top-0 right-0 w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
@@ -466,14 +485,20 @@ const AuthView = ({ lang, setLang, t, showToast }: any) => {
     setLoading(true);
     try {
       if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({ 
+        const { error } = await supabase.auth.signInWithPassword({ 
           email: formData.email, 
           password: formData.password 
         });
         
         if (error) {
           let msg = error.message;
-          if (msg.includes("Invalid login credentials")) msg = "البريد الإلكتروني أو كلمة المرور غير صحيحة";
+          if (msg.toLowerCase().includes("invalid login credentials") || msg.toLowerCase().includes("invalid credentials")) {
+            msg = "البريد الإلكتروني أو كلمة المرور غير صحيحة";
+          } else if (msg.toLowerCase().includes("email not confirmed")) {
+            msg = "يرجى تأكيد بريدك الإلكتروني أولاً";
+          } else {
+            msg = "حدث خطأ أثناء تسجيل الدخول، يرجى المحاولة لاحقاً";
+          }
           showToast(msg, 'error');
           setLoading(false);
         }
@@ -493,7 +518,7 @@ const AuthView = ({ lang, setLang, t, showToast }: any) => {
         }
       }
     } catch (err: any) {
-      showToast("حدث خطأ تقني غير متوقع", 'error');
+      showToast("خطأ في الاتصال بالخادم", 'error');
       setLoading(false);
     }
   };
