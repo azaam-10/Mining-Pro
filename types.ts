@@ -9,7 +9,6 @@ export interface Machine {
   duration: number; // in days
 }
 
-// Updated to match Supabase database column naming (snake_case)
 export interface UserMachine {
   id: number;
   machine_id: number;
@@ -17,15 +16,18 @@ export interface UserMachine {
   last_claim_date: string | null;
   total_earned: number;
   remaining_days: number;
+  user_id?: string; // Added for admin view
 }
 
 export interface Transaction {
   id: string;
+  user_id: string;
   type: 'deposit' | 'withdrawal' | 'task' | 'referral';
   amount: number;
   status: 'pending' | 'completed' | 'failed';
   date: string;
   details?: string;
+  proof_url?: string; // For deposit evidence
 }
 
 export interface UserState {
@@ -34,9 +36,13 @@ export interface UserState {
   last_name: string;
   email: string;
   balance: number;
-  withdrawableBalance: number;
+  withdrawable_balance: number; // Use exact DB field name
+  withdrawableBalance: number; // For app state
+  total_recharge: number;
   totalRecharge: number;
+  total_withdraw: number;
   totalWithdraw: number;
+  referral_earnings: number;
   referralEarnings: number;
   referral_code: string;
   ownedMachines: UserMachine[];
