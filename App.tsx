@@ -32,42 +32,43 @@ const App: React.FC = () => {
   const [userData, setUserData] = useState<UserState | null>(null);
   const [fetchError, setFetchError] = useState(false);
 
-  const fetchAllUserData = async (userId: string, isManual: boolean = false, retryCount = 0) => {
+  const fetchAllUserData = async (userId: string, isManual: boolean = false) => {
     if (isManual) setSyncing(true);
     setFetchError(false);
     
     try {
-      const { data: profile, error: profileErr } = await supabase.from('profiles').select('*').eq('id', userId).single();
-      
-      if (profileErr) {
-        if (profileErr.code === 'PGRST116' || profileErr.code === '42P01') {
-          if (retryCount < 8) {
-            setTimeout(() => fetchAllUserData(userId, isManual, retryCount + 1), 500);
-            return;
+      const [profileRes, machinesRes, txsRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('user_machines').select('*').eq('user_id', userId),
+        supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false })
+      ]);
+
+      let profile = profileRes.data;
+
+      if (profileRes.error && profileRes.error.code === 'PGRST116') {
+        const { data: newProfile } = await supabase.from('profiles').insert([
+          { 
+            id: userId, 
+            balance: 0, 
+            withdrawable_balance: 0, 
+            referral_code: Math.random().toString(36).substring(2, 8).toUpperCase(),
+            first_name: session?.user?.user_metadata?.first_name || 'User',
+            last_name: session?.user?.user_metadata?.last_name || ''
           }
-          const { data: newProfile } = await supabase.from('profiles').insert([
-            { id: userId, balance: 0, withdrawable_balance: 0, referral_code: Math.random().toString(36).substring(2, 8).toUpperCase() }
-          ]).select().single();
-          
-          if (newProfile) {
-            setUserData(formatUserData(newProfile, [], []));
-          } else {
-            setFetchError(true);
-          }
-        } else {
-          setFetchError(true);
-        }
-      } else if (profile) {
-        const [machinesRes, txsRes] = await Promise.all([
-          supabase.from('user_machines').select('*').eq('user_id', userId),
-          supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false })
-        ]);
+        ]).select().single();
+        profile = newProfile;
+      }
+
+      if (profile) {
         setUserData(formatUserData(profile, machinesRes.data || [], txsRes.data || []));
+      } else {
+        setFetchError(true);
       }
 
       if (isManual) showToast("تم التحديث", "success");
     } catch (err) {
       console.error("Fetch Error:", err);
+      setFetchError(true);
       if (isManual) showToast("فشل الاتصال", "error");
     } finally {
       setLoading(false);
@@ -102,7 +103,7 @@ const App: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
-        setLoading(true);
+        if (!userData) setLoading(true);
         fetchAllUserData(session.user.id);
       } else {
         setUserData(null);
@@ -148,14 +149,24 @@ const App: React.FC = () => {
   };
 
   const completeTask = async (um: UserMachine) => {
-    const today = formatDate(new Date());
-    if (um.last_claim_date === today || !userData || !session) return;
+    if (!userData || !session) return;
+    
+    // التحقق من مرور 24 ساعة فعلياً
+    if (um.last_claim_date) {
+      const lastClaim = new Date(um.last_claim_date).getTime();
+      const now = Date.now();
+      if (now - lastClaim < 24 * 60 * 60 * 1000) return;
+    }
+
     const machine = MACHINES.find(m => m.id === um.machine_id);
     if (!machine) return;
 
     setLoading(true);
+    // تخزين التوقيت الكامل ISO String بدلاً من التاريخ فقط
+    const nowISO = new Date().toISOString();
+    
     await supabase.from('user_machines').update({
-      last_claim_date: today,
+      last_claim_date: nowISO,
       total_earned: um.total_earned + machine.dailyProfit,
       remaining_days: um.remaining_days - 1
     }).eq('id', um.id);
@@ -165,7 +176,14 @@ const App: React.FC = () => {
       withdrawable_balance: userData.withdrawableBalance + machine.dailyProfit 
     }).eq('id', session.user.id);
 
-    await supabase.from('transactions').insert({ user_id: session.user.id, type: 'task', amount: machine.dailyProfit, status: 'completed' });
+    await supabase.from('transactions').insert({ 
+      user_id: session.user.id, 
+      type: 'task', 
+      amount: machine.dailyProfit, 
+      status: 'completed',
+      date: nowISO
+    });
+
     showToast(t('transactionCompleted'), 'success');
     await fetchAllUserData(session.user.id);
   };
@@ -369,28 +387,86 @@ const MachinesView = ({ user, onBuy, t }: any) => (
   </div>
 );
 
+// مكون العداد التنازلي الفرعي
+const CountdownTimer = ({ lastClaimDate, onFinish }: { lastClaimDate: string | null, onFinish: () => void }) => {
+  const [timeLeft, setTimeLeft] = useState<string>('');
+
+  useEffect(() => {
+    if (!lastClaimDate) return;
+
+    const calculate = () => {
+      const lastClaim = new Date(lastClaimDate).getTime();
+      const now = Date.now();
+      const diff = (lastClaim + 24 * 60 * 60 * 1000) - now;
+
+      if (diff <= 0) {
+        onFinish();
+        return;
+      }
+
+      const h = Math.floor(diff / (1000 * 60 * 60));
+      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const s = Math.floor((diff % (1000 * 60)) / 1000);
+
+      setTimeLeft(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
+    };
+
+    calculate();
+    const interval = setInterval(calculate, 1000);
+    return () => clearInterval(interval);
+  }, [lastClaimDate]);
+
+  return (
+    <div className="flex items-center gap-1.5 justify-center animate-pulse">
+      <Clock size={12} className="text-blue-500" />
+      <span className="font-mono text-sm tracking-widest">{timeLeft}</span>
+    </div>
+  );
+};
+
 const TasksView = ({ user, onComplete, t }: any) => {
-  const today = formatDate(new Date());
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <h2 className="text-xl font-black italic uppercase text-white flex items-center gap-3 flex-row-reverse px-1"><ListTodo className="text-blue-500" size={24}/> {t('tasks')}</h2>
       <div className="space-y-4">
           {user.ownedMachines.map((um: UserMachine) => {
             const m = MACHINES.find(x => x.id === um.machine_id);
-            const isDone = um.last_claim_date === today;
+            
+            // التحقق مما إذا كانت الـ 24 ساعة قد مرت
+            const lastClaim = um.last_claim_date ? new Date(um.last_claim_date).getTime() : 0;
+            const now = Date.now();
+            const isLocked = um.last_claim_date && (now - lastClaim < 24 * 60 * 60 * 1000);
+
             return (
-              <div key={um.id} className={`bg-[#0b0f1a] border ${isDone ? 'border-white/5 opacity-40' : 'border-emerald-500/20 shadow-emerald-500/5'} rounded-2xl p-4 shadow-xl text-right`}>
+              <div key={um.id} className={`bg-[#0b0f1a] border ${isLocked ? 'border-white/5 opacity-80' : 'border-emerald-500/20 shadow-emerald-500/5'} rounded-2xl p-4 shadow-xl text-right`}>
                 <div className="flex justify-between items-center flex-row-reverse mb-4">
                   <div className="text-right">
-                    <h4 className="font-black text-sm text-white uppercase italic">{m?.name}</h4>
-                    <p className="text-[8px] text-slate-700 font-bold mt-1 uppercase">Node Active</p>
+                    <div className="flex items-center gap-2 flex-row-reverse">
+                      <h4 className="font-black text-sm text-white uppercase italic">{m?.name}</h4>
+                      {isLocked && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping"></div>}
+                    </div>
+                    <p className="text-[8px] text-slate-700 font-bold mt-1 uppercase">Node Active • {um.remaining_days} days left</p>
                   </div>
-                  <div className={`text-left font-black italic text-lg ${isDone ? 'text-slate-800' : 'text-emerald-500'}`}>
+                  <div className={`text-left font-black italic text-lg ${isLocked ? 'text-slate-800' : 'text-emerald-500'}`}>
                     +{m?.dailyProfit}
                   </div>
                 </div>
-                <button disabled={isDone} onClick={() => onComplete(um)} className={`w-full py-3.5 rounded-xl font-black uppercase text-[11px] tracking-widest transition-all ${isDone ? 'bg-slate-900 text-slate-700' : 'bg-emerald-600 text-white active:scale-95'}`}>
-                  {isDone ? 'تم اليوم' : 'استلام أرباح التسييل'}
+                
+                <button 
+                  disabled={isLocked} 
+                  onClick={() => onComplete(um)} 
+                  className={`w-full py-4 rounded-xl font-black uppercase text-[11px] tracking-widest transition-all relative overflow-hidden ${isLocked ? 'bg-slate-900/50 text-slate-500 border border-white/5' : 'bg-emerald-600 text-white active:scale-95 shadow-lg shadow-emerald-900/20'}`}
+                >
+                  {isLocked ? (
+                    <CountdownTimer lastClaimDate={um.last_claim_date} onFinish={() => {}} />
+                  ) : (
+                    <div className="flex items-center justify-center gap-2">
+                      <TrendingUp size={14} />
+                      {t('completeTask')}
+                    </div>
+                  )}
+                  {/* تأثير ضوئي خلف العداد */}
+                  {isLocked && <div className="absolute inset-0 bg-blue-500/5 animate-pulse pointer-events-none"></div>}
                 </button>
               </div>
             );
@@ -467,7 +543,10 @@ const AuthView = ({ lang, t, showToast }: any) => {
           email: formData.email, 
           password: formData.password 
         });
-        if (error) { showToast("خطأ في البيانات", 'error'); setLoading(false); }
+        if (error) { 
+           showToast("خطأ في بيانات الدخول", 'error'); 
+           setLoading(false); 
+        }
       } else {
         const { error } = await supabase.auth.signUp({
           email: formData.email, 
@@ -523,20 +602,15 @@ const AdminView = ({ t, showToast }: any) => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      // 1. جلب البيانات بشكل متوازي لتقليل وقت الشبكة
       const [profilesRes, txsRes] = await Promise.all([
         supabase.from('profiles').select('*'),
         supabase.from('transactions').select('*').order('date', { ascending: false })
       ]);
 
-      if (profilesRes.data) {
-        setUsers(profilesRes.data);
-      }
+      if (profilesRes.data) setUsers(profilesRes.data);
       
       if (txsRes.data && profilesRes.data) {
-        // 2. استخدام Map للبحث السريع جداً O(1) بدلاً من .find() O(n)
         const profileMap = new Map(profilesRes.data.map(p => [p.id, p]));
-        
         const merged = txsRes.data.map(tx => ({
           ...tx,
           profiles: profileMap.get(tx.user_id) || { first_name: 'Unknown', last_name: 'User' }
