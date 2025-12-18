@@ -7,6 +7,8 @@ export interface Machine {
   price: number;
   dailyProfit: number;
   duration: number; // in days
+  description: string;
+  color: string;
 }
 
 export interface UserMachine {
