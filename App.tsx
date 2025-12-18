@@ -7,7 +7,7 @@ import {
   Loader2, ShieldCheck, HelpCircle, X, Copy, UploadCloud, 
   ArrowDown, Zap, Globe, Layers, Settings, Eye, Search, 
   RefreshCw, Calendar, ChevronLeft, MessageCircle, Send, Sparkles,
-  LogOut, Mail, Key, ShieldAlert, Award, TrendingUp, Gem, ChevronRight
+  LogOut, Mail, Key, ShieldAlert, Award, TrendingUp, Gem, ChevronRight, AlertTriangle
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL } from './constants';
@@ -30,12 +30,10 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [userData, setUserData] = useState<UserState | null>(null);
 
-  // دالة موحدة لجلب البيانات لضمان عدم تعليق التطبيق
   const fetchAllUserData = async (userId: string) => {
     try {
       const { data: profile, error: profileErr } = await supabase.from('profiles').select('*').eq('id', userId).single();
       
-      // إذا لم يوجد ملف شخصي، نحاول إنشاؤه (لتجنب الدوران اللانهائي)
       if (profileErr && profileErr.code === 'PGRST116') {
         const { data: newProfile } = await supabase.from('profiles').insert([
           { id: userId, balance: 0, withdrawable_balance: 0, referral_code: Math.random().toString(36).substring(2, 8).toUpperCase() }
@@ -65,7 +63,6 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
-    // التحقق من الجلسة مرة واحدة عند التشغيل
     const initAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
@@ -253,7 +250,6 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw }: any) 
         </div>
       </div>
 
-      {/* REASSURANCE CARD - Optimized */}
       <div className="bg-gradient-to-br from-slate-900 to-black border border-white/5 p-5 rounded-2xl space-y-3 text-right shadow-xl relative overflow-hidden group">
          <div className="absolute top-0 left-0 w-24 h-24 bg-emerald-500/5 blur-xl"></div>
          <div className="flex items-center gap-2 flex-row-reverse">
@@ -668,7 +664,6 @@ const AdminView = ({ t, showToast }: any) => {
                )}
             </div>
           ))}
-          {txs.filter(t => t.type === (tab === 'deposits' ? 'deposit' : 'withdrawal') && (subTab === 'pending' ? t.status === 'pending' : t.status !== 'pending')).length === 0 && <p className="text-center py-20 text-[10px] text-slate-800 font-black italic uppercase">لا توجد طلبات</p>}
         </div>
       )}
 
@@ -729,30 +724,66 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId }: any) => {
     }
   };
   const submit = async () => {
-    if (!amount || !image) return showToast("يرجى إكمال جميع الحقول", "error");
+    if (!amount || !image) return showToast("يرجى إكمال جميع الحقول ورفع الإثبات", "error");
     await supabase.from('transactions').insert({ user_id: userId, type: 'deposit', amount: Number(amount), status: 'pending', proof_url: image });
     showToast(t('verificationPending'), 'success'); onDeposit(); onClose();
   };
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl overflow-y-auto animate-in fade-in duration-300">
-      <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-sm rounded-3xl p-6 space-y-6 shadow-2xl animate-in zoom-in-95">
+      <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-sm rounded-3xl p-6 space-y-5 shadow-2xl animate-in zoom-in-95">
         <div className="flex justify-between items-center bg-blue-600 p-4 rounded-xl shadow-lg">
-          <h3 className="font-black text-white text-sm italic uppercase tracking-widest">شحن المحفظة</h3>
+          <h3 className="font-black text-white text-sm italic uppercase tracking-widest">إيداع أصول ذكية</h3>
           <button onClick={onClose} className="text-white p-1 hover:bg-white/10 rounded-lg"><X size={20} /></button>
         </div>
-        <div className="bg-blue-600/5 border border-blue-500/10 p-5 rounded-xl space-y-3 text-right shadow-inner">
+
+        {/* التحذير الأمني الصارم */}
+        <div className="bg-red-500/10 border border-red-500/30 p-3.5 rounded-xl flex items-start gap-3 flex-row-reverse shadow-inner animate-pulse">
+           <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={18} />
+           <div className="text-right">
+              <p className="text-[10px] font-black text-red-500 uppercase leading-none mb-1.5">تحذير أمني هام</p>
+              <p className="text-[9px] text-red-200/80 font-bold leading-relaxed">
+                 إرسال لقطات شاشة مزيفة أو إيصالات فارغة سيؤدي إلى **حظر حسابك نهائياً** فوراً. نحن نقوم بالتحقق من كل معاملة يدوياً.
+              </p>
+           </div>
+        </div>
+
+        <div className="bg-blue-600/5 border border-blue-500/10 p-4 rounded-xl space-y-3 text-right shadow-inner">
            <p className="text-[9px] font-black text-blue-500 uppercase italic leading-none">عنوان المحفظة (BEP20)</p>
            <div className="bg-black/40 p-3 rounded-lg flex items-center gap-3 border border-white/5">
-              <button onClick={() => {navigator.clipboard.writeText(DEPOSIT_ADDRESS); showToast('تم النسخ!', 'success')}} className="p-2 bg-blue-600 text-white rounded-lg active:scale-90 transition-all shadow-md"><Copy size={16}/></button>
+              <button onClick={() => {navigator.clipboard.writeText(DEPOSIT_ADDRESS); showToast('تم نسخ العنوان!', 'success')}} className="p-2 bg-blue-600 text-white rounded-lg active:scale-90 transition-all shadow-md"><Copy size={16}/></button>
               <span className="text-[9px] font-mono text-slate-500 break-all flex-1">{DEPOSIT_ADDRESS}</span>
            </div>
         </div>
-        <input type="number" placeholder="المبلغ USDT" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black italic text-center text-3xl outline-none focus:border-blue-500/50 shadow-inner" />
-        <label className="block border-2 border-dashed border-white/10 rounded-2xl p-8 text-center bg-white/5 cursor-pointer hover:border-blue-500/50 transition-all">
-           <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
-           {image ? <img src={image} className="w-20 h-20 mx-auto rounded-xl object-cover border-2 border-blue-500 shadow-lg" alt="Proof" /> : <div className="text-blue-500 space-y-2"><UploadCloud size={32} className="mx-auto" /><p className="text-[10px] uppercase font-bold">رفع إثبات التحويل</p></div>}
-        </label>
-        <button onClick={submit} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase text-xs active:scale-95 transition-all shadow-xl">تأكيد عملية الشحن</button>
+
+        <div className="space-y-2 text-right">
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">أدخل المبلغ المرسل</p>
+          <input type="number" placeholder="0.00 USDT" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black italic text-center text-3xl outline-none focus:border-blue-500/50 shadow-inner transition-all" />
+        </div>
+
+        <div className="space-y-3 text-right">
+          <div className="flex justify-between items-center flex-row-reverse">
+             <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">إثبات التحويل</p>
+             <span className="text-[8px] text-blue-500 font-bold italic">Capture Screenshot</span>
+          </div>
+          <p className="text-[10px] text-slate-400 font-medium italic leading-none mb-2">يرجى رفع لقطة شاشة لعملية الإرسال الناجحة من محفظتك (تظهر الرقم المرجعي والمبلغ).</p>
+          
+          <label className="block border-2 border-dashed border-white/10 rounded-2xl p-6 text-center bg-white/5 cursor-pointer hover:border-blue-500/50 transition-all group">
+             <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+             {image ? (
+               <div className="relative inline-block">
+                 <img src={image} className="w-24 h-24 mx-auto rounded-xl object-cover border-2 border-blue-500 shadow-xl" alt="Proof" />
+                 <div className="absolute -top-2 -right-2 bg-emerald-500 text-white p-1 rounded-full"><CheckCircle2 size={14}/></div>
+               </div>
+             ) : (
+               <div className="text-blue-500/50 space-y-2 group-hover:text-blue-500 transition-colors">
+                 <UploadCloud size={32} className="mx-auto" />
+                 <p className="text-[10px] uppercase font-bold tracking-widest">رفع لقطة الشاشة</p>
+               </div>
+             )}
+          </label>
+        </div>
+
+        <button onClick={submit} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase text-xs active:scale-95 transition-all shadow-xl hover:bg-slate-50 mt-2">تأكيد الإيداع في النظام</button>
       </div>
     </div>
   );
@@ -771,18 +802,24 @@ const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast
   };
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in duration-300">
-      <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-sm rounded-3xl p-6 space-y-6 shadow-2xl animate-in zoom-in-95">
+      <div className="bg-[#0b0f1a] border border-white/10 w-full max-sm:max-w-xs max-w-sm rounded-3xl p-6 space-y-6 shadow-2xl animate-in zoom-in-95">
         <div className="flex justify-between items-center bg-blue-700 p-4 rounded-xl shadow-lg">
-          <h3 className="font-black text-white text-sm italic uppercase tracking-widest">سحب السيولة</h3>
+          <h3 className="font-black text-white text-sm italic uppercase tracking-widest">تسييل الأرباح</h3>
           <button onClick={onClose} className="text-white p-1 hover:bg-white/10 rounded-lg"><X size={20} /></button>
         </div>
         <div className="bg-blue-600/5 p-5 rounded-xl flex justify-between items-center flex-row-reverse border border-white/5 shadow-inner">
            <span className="text-[9px] font-black text-slate-500 uppercase leading-none">متاح للتسييل</span>
            <span className="text-2xl font-black text-blue-500 italic leading-none">{max.toFixed(2)}</span>
         </div>
-        <input value={address} onChange={e => setAddress(e.target.value)} placeholder="عنوان محفظة USDT (BEP20)" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-mono text-xs outline-none focus:border-blue-500/50 shadow-inner" />
-        <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="المبلغ (Min 8)" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black italic text-center text-3xl outline-none focus:border-blue-500/50 shadow-inner" />
-        <button onClick={submit} className="w-full bg-blue-600 text-white font-black py-4 rounded-xl uppercase text-xs active:scale-95 transition-all shadow-xl">بدء عملية التسييل</button>
+        <div className="space-y-2 text-right">
+           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">عنوان المحفظة (BEP20)</p>
+           <input value={address} onChange={e => setAddress(e.target.value)} placeholder="0x..." className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-mono text-xs outline-none focus:border-blue-500/50 shadow-inner" />
+        </div>
+        <div className="space-y-2 text-right">
+           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">المبلغ المراد سحبه</p>
+           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Min 8 USDT" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black italic text-center text-3xl outline-none focus:border-blue-500/50 shadow-inner" />
+        </div>
+        <button onClick={submit} className="w-full bg-blue-600 text-white font-black py-4 rounded-xl uppercase text-xs active:scale-95 transition-all shadow-xl hover:bg-blue-500">بدء عملية السحب</button>
       </div>
     </div>
   );
