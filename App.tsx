@@ -11,7 +11,7 @@ import {
   Lock, Shield, Check, Activity, Info, Briefcase, History, Crown, Star, Flame, Diamond, ZapOff
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
-import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL } from './constants';
+import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL, NETWORK } from './constants';
 import { supabase } from './supabase';
 
 interface Toast { message: string; type: 'success' | 'error' | 'info'; id: number; }
@@ -37,7 +37,6 @@ const App: React.FC = () => {
   const [userData, setUserData] = useState<UserState | null>(null);
   const [fetchError, setFetchError] = useState(false);
 
-  // تنسيق البيانات مع استبعاد الحقول التي قد تسبب أخطاء في السكيما
   const formatUserData = (profile: any, machines: any[], txs: any[], email: string): UserState => ({
     ...profile,
     email: email || profile.email || '',
@@ -47,7 +46,7 @@ const App: React.FC = () => {
     referralEarnings: profile.referral_earnings || 0,
     ownedMachines: (machines || []).filter(m => m.remaining_days > 0),
     transactions: txs || [],
-    lastWithdrawDate: null // تم الإلغاء للاعتماد على سجل المعاملات
+    lastWithdrawDate: null 
   });
 
   const fetchAllUserData = useCallback(async (userId: string, userEmail: string, isManual: boolean = false) => {
@@ -129,13 +128,11 @@ const App: React.FC = () => {
   const showToast = (message: any, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now();
     let finalMsg = "";
-    
     if (typeof message === 'object') {
-      finalMsg = message.message || message.error_description || message.details || JSON.stringify(message);
+      finalMsg = message.message || message.error_description || JSON.stringify(message);
     } else {
       finalMsg = String(message);
     }
-
     setToasts(prev => [...prev, { message: finalMsg, type, id }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   };
@@ -751,12 +748,9 @@ const AdminView = ({ t, showToast, lang }: any) => {
 
   useEffect(() => { 
     fetchData(); 
-    // تفعيل خاصية التحديث الفوري للأدمن لضمان وصول الإشعار
     const channel = supabase.channel('tx-updates')
-      .on('postgres_changes', { event: 'INSERT', table: 'transactions' }, () => fetchData())
-      .on('postgres_changes', { event: 'UPDATE', table: 'transactions' }, () => fetchData())
+      .on('postgres_changes', { event: '*', table: 'transactions' }, () => fetchData())
       .subscribe();
-      
     return () => { supabase.removeChannel(channel); };
   }, []);
 
@@ -784,7 +778,6 @@ const AdminView = ({ t, showToast, lang }: any) => {
     if (!user) return;
     
     try {
-      // 1. الإيداع: زيادة الرصيد عند القبول
       if (tx.type === 'deposit' && newStatus === 'completed') {
         await supabase.from('profiles').update({ 
           balance: Number(user.balance) + Math.abs(tx.amount), 
@@ -792,7 +785,6 @@ const AdminView = ({ t, showToast, lang }: any) => {
         }).eq('id', tx.user_id);
       }
       
-      // 2. السحب: استرجاع الرصيد عند الرفض
       if (tx.type === 'withdrawal' && newStatus === 'failed') {
          await supabase.from('profiles').update({ 
            balance: Number(user.balance) + Math.abs(tx.amount), 
@@ -800,7 +792,6 @@ const AdminView = ({ t, showToast, lang }: any) => {
          }).eq('id', tx.user_id);
       }
 
-      // 3. السحب: زيادة إجمالي المسحوبات عند القبول
       if (tx.type === 'withdrawal' && newStatus === 'completed') {
         await supabase.from('profiles').update({
           total_withdraw: Number(user.total_withdraw || 0) + Math.abs(tx.amount)
@@ -961,6 +952,7 @@ const AdminView = ({ t, showToast, lang }: any) => {
 const RechargeModal = ({ t, onClose, onDeposit, showToast, userId, setIsProcessing, isProcessing, lang }: any) => {
   const [amount, setAmount] = useState('');
   const [image, setImage] = useState('');
+  const [localError, setLocalError] = useState('');
   const [internalLoading, setInternalLoading] = useState(false);
 
   const handleFileUpload = (e: any) => {
@@ -973,12 +965,15 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId, setIsProcessi
   };
 
   const submit = async () => {
+    setLocalError('');
     if (internalLoading || isProcessing) return;
-    if (!amount || !image) return showToast(lang === 'ar' ? "أكمل البيانات" : "Complete data", "error");
+    if (!amount || !image) {
+      setLocalError(lang === 'ar' ? "يرجى إكمال جميع البيانات ورفع صورة الإثبات" : "Please complete all fields and upload proof");
+      return;
+    }
     
     setInternalLoading(true);
     setIsProcessing(true);
-    
     try {
       const { error } = await supabase.from('transactions').insert({ 
         user_id: userId, 
@@ -989,12 +984,11 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId, setIsProcessi
         date: new Date().toISOString()
       });
       if (error) throw error;
-      
       showToast(t('verificationPending'), 'success');
       onDeposit();
       onClose();
     } catch (e: any) {
-      showToast(e, "error");
+      setLocalError(e.message || String(e));
     } finally {
       setInternalLoading(false);
       setIsProcessing(false);
@@ -1004,24 +998,52 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId, setIsProcessi
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in">
       <div className="bg-[#0b0f1a] border border-white/10 w-full max-sm rounded-3xl p-6 space-y-5 animate-in zoom-in-95 shadow-2xl relative">
-        {internalLoading && (
-          <div className="absolute inset-0 z-50 bg-[#0b0f1a]/95 flex flex-col items-center justify-center space-y-4">
-             <Loader2 className="animate-spin text-blue-500" size={32} />
-             <p className="text-white/60 font-black text-xs uppercase tracking-widest">Encrypting Signature...</p>
-          </div>
-        )}
-        <div className="flex justify-between items-center bg-blue-600 p-4 rounded-xl">
-          <h3 className="font-black text-white text-sm uppercase italic">Deposit Assets</h3>
+        <div className="flex justify-between items-center bg-blue-600 p-4 rounded-xl mb-2">
+          <h3 className="font-black text-white text-sm uppercase italic">{lang === 'ar' ? 'إيداع الأصول' : 'Deposit Assets'}</h3>
           <button onClick={onClose} className="text-white"><X size={20} /></button>
         </div>
+        
+        <div className={`p-4 bg-black/40 rounded-xl border border-white/5 space-y-3 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
+          <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">{lang === 'ar' ? 'عنوان الإيداع الموحد' : 'Unified Deposit Address'}</p>
+          <div className="flex items-center gap-2 bg-black/40 p-3 rounded-lg border border-white/5">
+            <span className="text-[9px] font-mono text-white flex-1 break-all">{DEPOSIT_ADDRESS}</span>
+            <button onClick={() => {navigator.clipboard.writeText(DEPOSIT_ADDRESS); alert(lang === 'ar' ? 'تم نسخ العنوان' : 'Address Copied')}} className="p-2 bg-blue-600 rounded-lg text-white"><Copy size={14}/></button>
+          </div>
+          <div className="flex justify-between items-center pt-1 border-t border-white/5">
+             <span className="text-[9px] text-slate-500 font-bold">{lang === 'ar' ? 'الشبكة المدعومة' : 'Network Type'}</span>
+             <span className="text-[9px] text-emerald-500 font-black uppercase tracking-widest">{NETWORK}</span>
+          </div>
+        </div>
+
         <div className="space-y-4">
-           <input type="number" placeholder="Amount (USDT)" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center text-2xl outline-none" />
-           <label className="block border-2 border-dashed border-white/10 rounded-xl p-6 text-center bg-white/5 cursor-pointer">
+           <input type="number" placeholder={lang === 'ar' ? "أدخل المبلغ المودع (USDT)" : "Deposit Amount (USDT)"} value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center text-xl outline-none focus:border-blue-500/40" />
+           <label className="block border-2 border-dashed border-white/10 rounded-xl p-6 text-center bg-white/5 cursor-pointer hover:border-blue-500/20 transition-all">
               <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
-              {image ? <img src={image} className="w-16 h-16 mx-auto rounded-lg object-cover" /> : <UploadCloud size={32} className="mx-auto text-blue-500 opacity-60" />}
+              {image ? (
+                <div className="space-y-2">
+                  <img src={image} className="w-16 h-16 mx-auto rounded-lg object-cover border border-white/10" />
+                  <p className="text-[9px] text-emerald-500 font-black">{lang === 'ar' ? 'تم اختيار الصورة' : 'Image Selected'}</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                   <UploadCloud size={32} className="mx-auto text-blue-500 opacity-60" />
+                   <p className="text-[9px] text-slate-600 font-bold">{lang === 'ar' ? 'اضغط لرفع لقطة شاشة لإثبات الإيداع' : 'Click to upload proof of deposit'}</p>
+                </div>
+              )}
            </label>
         </div>
-        <button onClick={submit} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase text-xs active:scale-95 transition-all">Submit Deposit</button>
+
+        {localError && (
+          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2 text-red-500 animate-in slide-in-from-top-2">
+             <ShieldAlert size={14}/>
+             <span className="text-[10px] font-bold">{localError}</span>
+          </div>
+        )}
+
+        <button onClick={submit} disabled={internalLoading || isProcessing} className={`w-full bg-white text-black font-black py-4 rounded-xl uppercase text-xs active:scale-95 transition-all flex items-center justify-center gap-2 shadow-xl ${internalLoading ? 'opacity-50' : ''}`}>
+          {internalLoading ? <Loader2 className="animate-spin" size={16}/> : <Check size={16}/>}
+          {lang === 'ar' ? 'إرسال الطلب للمراجعة' : 'Submit for Review'}
+        </button>
       </div>
     </div>
   );
@@ -1030,31 +1052,41 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId, setIsProcessi
 const WithdrawModal = ({ t, onClose, onWithdraw, userData, userId, showToast, setIsProcessing, isProcessing, lang }: any) => {
   const [amount, setAmount] = useState('');
   const [address, setAddress] = useState('');
+  const [localError, setLocalError] = useState('');
   const [internalLoading, setInternalLoading] = useState(false);
   
   const submit = async () => {
+    setLocalError('');
     if (internalLoading || isProcessing) return;
     
-    // فحص سحب واحد يومياً عبر سجل المعاملات بدلاً من عامود البروفايل
     const lastWithdrawal = userData.transactions.find(tx => tx.type === 'withdrawal' && (tx.status === 'pending' || tx.status === 'completed'));
     if (lastWithdrawal) {
       const lastDate = new Date(lastWithdrawal.date).toDateString();
       const today = new Date().toDateString();
-      if (lastDate === today) return showToast(lang === 'ar' ? "عذراً، يسمح بسحب واحد فقط خلال 24 ساعة" : "Only one withdrawal per 24h", "error");
+      if (lastDate === today) {
+        setLocalError(lang === 'ar' ? "عذراً، يسمح بسحب واحد فقط كل 24 ساعة" : "Only one withdrawal per 24h");
+        return;
+      }
     }
 
     const amt = Number(amount);
-    if (isNaN(amt) || amt < MIN_WITHDRAWAL) return showToast(lang === 'ar' ? "الحد الأدنى للسحب هو 8 عملات" : "Min 8 USDT", 'error');
-    if (amt > Number(userData.withdrawableBalance)) return showToast(lang === 'ar' ? "رصيدك القابل للسحب غير كافٍ" : "Insufficient balance", "error");
-    if (!address.trim()) return showToast(lang === 'ar' ? "يرجى إدخال عنوان المحفظة" : "Enter address", "error");
+    if (isNaN(amt) || amt < MIN_WITHDRAWAL) {
+      setLocalError(lang === 'ar' ? `الحد الأدنى للسحب هو ${MIN_WITHDRAWAL} عملات` : `Min withdrawal is ${MIN_WITHDRAWAL} USDT`);
+      return;
+    }
+    if (amt > Number(userData.withdrawableBalance)) {
+      setLocalError(lang === 'ar' ? "رصيدك غير كافٍ" : "Insufficient balance");
+      return;
+    }
+    if (!address.trim() || address.length < 10) {
+      setLocalError(lang === 'ar' ? "يرجى إدخال عنوان محفظة BEP20 صالح" : "Enter a valid BEP20 address");
+      return;
+    }
     
     setInternalLoading(true);
     setIsProcessing(true);
-    
     try {
       const nowISO = new Date().toISOString();
-      
-      // الخطوة الأولى: تسجيل المعاملة للأدمن (هذا سيظهر فوراً للأدمن)
       const { error: txError } = await supabase.from('transactions').insert({ 
         user_id: userId, 
         type: 'withdrawal', 
@@ -1063,27 +1095,23 @@ const WithdrawModal = ({ t, onClose, onWithdraw, userData, userId, showToast, se
         details: `Wallet: ${address} | BEP20`,
         date: nowISO
       });
-
       if (txError) throw txError;
 
-      // الخطوة الثانية: خصم الرصيد من جدول البروفايل (تحديث الحقول المتأكدين من وجودها فقط)
       const { error: profileError } = await supabase.from('profiles').update({ 
         balance: Number(userData.balance) - amt, 
         withdrawable_balance: Number(userData.withdrawableBalance) - amt
       }).eq('id', userId);
 
       if (profileError) {
-        // إذا فشل تحديث الرصيد، نحذف المعاملة المسجلة لضمان النزاهة
         await supabase.from('transactions').delete().match({ user_id: userId, date: nowISO, type: 'withdrawal' });
         throw profileError;
       }
       
-      showToast(lang === 'ar' ? "تم إرسال طلب السحب بنجاح" : "Withdrawal submitted", 'success');
+      showToast(lang === 'ar' ? "تم تقديم طلب السحب بنجاح" : "Withdrawal submitted", 'success');
       onWithdraw(); 
       onClose(); 
     } catch (e: any) {
-      console.error("Withdraw Error Detail:", e);
-      showToast(e, "error");
+      setLocalError(e.message || String(e));
     } finally {
       setInternalLoading(false);
       setIsProcessing(false);
@@ -1093,25 +1121,44 @@ const WithdrawModal = ({ t, onClose, onWithdraw, userData, userId, showToast, se
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in">
       <div className="bg-[#0b0f1a] border border-white/10 w-full max-sm rounded-3xl p-6 space-y-6 animate-in zoom-in-95 shadow-2xl relative">
-        {internalLoading && (
-          <div className="absolute inset-0 z-50 bg-[#0b0f1a]/95 flex flex-col items-center justify-center space-y-4">
-             <Loader2 className="animate-spin text-red-500" size={32} />
-             <p className="text-white/60 font-black text-xs uppercase tracking-widest">Securing Protocol...</p>
-          </div>
-        )}
-        <div className="flex justify-between items-center bg-red-600 p-4 rounded-xl">
-          <h3 className="font-black text-white text-sm uppercase italic">Withdraw Protocol</h3>
+        <div className="flex justify-between items-center bg-red-600 p-4 rounded-xl mb-2">
+          <h3 className="font-black text-white text-sm uppercase italic">{lang === 'ar' ? 'سحب الأصول' : 'Withdraw Assets'}</h3>
           <button onClick={onClose} className="text-white"><X size={20} /></button>
         </div>
+        
         <div className="space-y-4">
-           <div className="flex justify-between bg-white/5 p-4 rounded-xl border border-white/5">
-             <span className="text-[10px] text-slate-500 uppercase font-black">Available</span>
-             <span className="text-xl font-black text-red-500">{Number(userData.withdrawableBalance).toFixed(2)} USDT</span>
+           <div className={`p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center ${lang === 'ar' ? 'flex-row-reverse' : ''}`}>
+             <span className="text-[10px] text-slate-500 uppercase font-black">{lang === 'ar' ? 'الرصيد القابل للسحب' : 'Withdrawable'}</span>
+             <span className="text-xl font-black text-red-500 italic">{Number(userData.withdrawableBalance).toFixed(2)} USDT</span>
            </div>
-           <input value={address} onChange={e => setAddress(e.target.value)} placeholder="BEP20 Wallet Address" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-mono text-xs outline-none" />
-           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (Min 8)" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center text-3xl outline-none" />
+
+           <div className="space-y-2">
+             <p className={`text-[10px] text-slate-600 font-black uppercase tracking-widest px-1 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>{lang === 'ar' ? 'عنوان محفظة المستلم' : 'Destination Wallet Address'}</p>
+             <input value={address} onChange={e => setAddress(e.target.value)} placeholder="0x..." className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-mono text-xs outline-none focus:border-red-500/40" />
+           </div>
+
+           <div className="space-y-2">
+             <p className={`text-[10px] text-slate-600 font-black uppercase tracking-widest px-1 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>{lang === 'ar' ? 'المبلغ المراد سحبه' : 'Withdraw Amount'}</p>
+             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={lang === 'ar' ? `الحد الأدنى ${MIN_WITHDRAWAL}` : `Min ${MIN_WITHDRAWAL}`} className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center text-3xl outline-none focus:border-red-500/40" />
+           </div>
         </div>
-        <button onClick={submit} className="w-full bg-red-600 text-white font-black py-4 rounded-xl uppercase text-xs active:scale-95 transition-all">Confirm Withdrawal</button>
+
+        {localError && (
+          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2 text-red-500 animate-in slide-in-from-top-2">
+             <ShieldAlert size={14}/>
+             <span className="text-[10px] font-bold">{localError}</span>
+          </div>
+        )}
+
+        <div className={`p-4 bg-slate-900/50 rounded-xl border border-white/5 ${lang === 'ar' ? 'text-right' : 'text-left'} space-y-1`}>
+          <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{lang === 'ar' ? 'ملاحظة البروتوكول' : 'Protocol Note'}</p>
+          <p className="text-[9px] text-slate-300 leading-relaxed italic">{lang === 'ar' ? 'تتم معالجة السحوبات خلال 1-24 ساعة من محافظ رسمية لضمان سيولة مشروعة تماماً.' : 'Withdrawals are processed within 1-24 hours from official wallets to ensure full compliance.'}</p>
+        </div>
+
+        <button onClick={submit} disabled={internalLoading || isProcessing} className={`w-full bg-red-600 text-white font-black py-4 rounded-xl uppercase text-xs active:scale-95 transition-all flex items-center justify-center gap-2 shadow-xl ${internalLoading ? 'opacity-50' : ''}`}>
+          {internalLoading ? <Loader2 className="animate-spin" size={16}/> : <ArrowUpCircle size={16}/>}
+          {lang === 'ar' ? 'تأكيد السحب الآن' : 'Confirm Withdrawal'}
+        </button>
       </div>
     </div>
   );
