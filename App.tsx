@@ -7,13 +7,12 @@ import {
   Loader2, ShieldCheck, HelpCircle, X, Copy, UploadCloud, 
   ArrowDown, Zap, Globe, Layers, Settings, Eye, Search, 
   RefreshCw, Calendar, ChevronLeft, MessageCircle, Send, Sparkles,
-  LogOut, Mail, Key, ShieldAlert, Award, TrendingUp, Gem, ChevronRight, AlertTriangle, ExternalLink
+  LogOut, Mail, Key, ShieldAlert, Award, TrendingUp, Gem, ChevronRight, AlertTriangle, ExternalLink,
+  Lock, Shield, Check, Activity
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL } from './constants';
 import { supabase } from './supabase';
-
-const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
 interface Toast { message: string; type: 'success' | 'error' | 'info'; id: number; }
 
@@ -27,46 +26,61 @@ const App: React.FC = () => {
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false); // لمنع Race Conditions
+  const [isProcessing, setIsProcessing] = useState(false); 
   const [syncing, setSyncing] = useState(false);
   const [session, setSession] = useState<any>(null);
   const [userData, setUserData] = useState<UserState | null>(null);
   const [fetchError, setFetchError] = useState(false);
 
-  const fetchAllUserData = useCallback(async (userId: string, isManual: boolean = false) => {
+  const formatUserData = (profile: any, machines: any[], txs: any[], email: string): UserState => ({
+    ...profile,
+    email: email || profile.email || '',
+    withdrawableBalance: profile.withdrawable_balance || 0,
+    totalRecharge: profile.total_recharge || 0,
+    totalWithdraw: profile.total_withdraw || 0,
+    referralEarnings: profile.referral_earnings || 0,
+    ownedMachines: machines || [],
+    transactions: txs || [],
+    lastWithdrawDate: profile.last_withdraw_date || null
+  });
+
+  const fetchAllUserData = useCallback(async (userId: string, userEmail: string, isManual: boolean = false) => {
+    if (!userId) return;
     if (isManual) setSyncing(true);
     setFetchError(false);
     
     try {
       const [profileRes, machinesRes, txsRes] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
         supabase.from('user_machines').select('*').eq('user_id', userId),
         supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false })
       ]);
 
       let profile = profileRes.data;
 
-      if (profileRes.error && profileRes.error.code === 'PGRST116') {
-        const { data: newProfile } = await supabase.from('profiles').insert([
+      if (!profile && !profileRes.error) {
+        const { data: newProfile, error: insertError } = await supabase.from('profiles').insert([
           { 
             id: userId, 
             balance: 0, 
             withdrawable_balance: 0, 
             referral_code: Math.random().toString(36).substring(2, 8).toUpperCase(),
-            first_name: session?.user?.user_metadata?.first_name || 'User',
-            last_name: session?.user?.user_metadata?.last_name || ''
+            first_name: 'User',
+            last_name: ''
           }
         ]).select().single();
+        
+        if (insertError) throw insertError;
         profile = newProfile;
       }
 
       if (profile) {
-        setUserData(formatUserData(profile, machinesRes.data || [], txsRes.data || []));
+        setUserData(formatUserData(profile, machinesRes.data || [], txsRes.data || [], userEmail));
       } else {
         setFetchError(true);
       }
 
-      if (isManual) showToast("تم التحديث بنجاح", "success");
+      if (isManual) showToast("تم تحديث البيانات", "success");
     } catch (err) {
       console.error("Fetch Error:", err);
       setFetchError(true);
@@ -74,25 +88,14 @@ const App: React.FC = () => {
       setLoading(false);
       setSyncing(false);
     }
-  }, [session]);
-
-  const formatUserData = (profile: any, machines: any[], txs: any[]): UserState => ({
-    ...profile,
-    withdrawableBalance: profile.withdrawable_balance || 0,
-    totalRecharge: profile.total_recharge || 0,
-    totalWithdraw: profile.total_withdraw || 0,
-    referralEarnings: profile.referral_earnings || 0,
-    ownedMachines: machines,
-    transactions: txs,
-    lastWithdrawDate: profile.last_withdraw_date || null
-  });
+  }, []);
 
   useEffect(() => {
     const initAuth = async () => {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       setSession(currentSession);
-      if (currentSession) {
-        fetchAllUserData(currentSession.user.id);
+      if (currentSession?.user) {
+        fetchAllUserData(currentSession.user.id, currentSession.user.email || '');
       } else {
         setLoading(false);
       }
@@ -101,9 +104,9 @@ const App: React.FC = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) {
+      if (session?.user) {
         if (!userData) setLoading(true);
-        fetchAllUserData(session.user.id);
+        fetchAllUserData(session.user.id, session.user.email || '');
       } else {
         setUserData(null);
         setLoading(false);
@@ -114,7 +117,7 @@ const App: React.FC = () => {
   }, [fetchAllUserData]);
 
   const handleManualRefresh = () => {
-    if (session) fetchAllUserData(session.user.id, true);
+    if (session?.user) fetchAllUserData(session.user.id, session.user.email || '', true);
   };
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -125,18 +128,14 @@ const App: React.FC = () => {
 
   const t = (key: string) => TRANSLATIONS[key]?.[lang] || key;
 
-  // شراء الماكينة مع حماية كاملة
   const buyMachine = async (machine: Machine) => {
-    if (!userData || !session || isProcessing) return;
-    
-    // فحص أمني للرصيد قبل أي عملية
+    if (!userData || !session?.user || isProcessing) return;
     if (userData.balance < machine.price) {
-      return showToast("عذراً، رصيدك الحالي غير كافٍ لتفعيل هذا العقد", 'error');
+      return showToast("رصيدك الحالي غير كافٍ", 'error');
     }
     
     setIsProcessing(true);
     try {
-      // 1. إضافة الماكينة للمستخدم
       const { error: machineErr } = await supabase.from('user_machines').insert({
         user_id: session.user.id,
         machine_id: machine.id,
@@ -146,33 +145,27 @@ const App: React.FC = () => {
 
       if (machineErr) throw machineErr;
 
-      // 2. تحديث الرصيد (يُفضل عمل هذا في Supabase Function ولكن سنقوم به هنا بحذر)
-      const { error: updateErr } = await supabase.from('profiles')
+      await supabase.from('profiles')
         .update({ balance: userData.balance - machine.price })
-        .eq('id', session.user.id)
-        .gte('balance', machine.price); // شرط إضافي لضمان عدم السحب إذا قل الرصيد فجأة
+        .eq('id', session.user.id);
 
-      if (updateErr) throw updateErr;
-
-      showToast("تم تفعيل عقد التسييل بنجاح", 'success');
-      await fetchAllUserData(session.user.id);
+      showToast("تم تفعيل العقد بنجاح", 'success');
+      await fetchAllUserData(session.user.id, session.user.email || '');
     } catch (err: any) {
-      showToast(err.message || "حدث خطأ غير متوقع", 'error');
+      showToast("حدث خطأ أثناء الشراء", 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // تنفيذ المهمة مع حماية من التلاعب بالوقت
   const completeTask = async (um: UserMachine) => {
-    if (!userData || !session || isProcessing) return;
+    if (!userData || !session?.user || isProcessing) return;
     
     const now = Date.now();
     const lastClaim = um.last_claim_date ? new Date(um.last_claim_date).getTime() : 0;
     
-    // منع الاستلام قبل مرور 24 ساعة (أمنياً)
     if (now - lastClaim < 24 * 60 * 60 * 1000) {
-      return showToast("لم تنتهِ دورة الـ 24 ساعة بعد", 'error');
+      return showToast("المهمة قيد الانتظار", 'error');
     }
 
     const machine = MACHINES.find(m => m.id === um.machine_id);
@@ -181,23 +174,17 @@ const App: React.FC = () => {
     setIsProcessing(true);
     try {
       const nowISO = new Date().toISOString();
-      
-      // تحديث بيانات الماكينة
-      const { error: machineUpdateErr } = await supabase.from('user_machines').update({
+      await supabase.from('user_machines').update({
         last_claim_date: nowISO,
-        total_earned: um.total_earned + machine.dailyProfit,
-        remaining_days: um.remaining_days - 1
-      }).eq('id', um.id).eq('user_id', session.user.id);
+        total_earned: (um.total_earned || 0) + machine.dailyProfit,
+        remaining_days: (um.remaining_days || 0) - 1
+      }).eq('id', um.id);
 
-      if (machineUpdateErr) throw machineUpdateErr;
-
-      // تحديث الرصيد
       await supabase.from('profiles').update({ 
         balance: userData.balance + machine.dailyProfit, 
         withdrawable_balance: userData.withdrawableBalance + machine.dailyProfit 
       }).eq('id', session.user.id);
 
-      // تسجيل المعاملة
       await supabase.from('transactions').insert({ 
         user_id: session.user.id, 
         type: 'task', 
@@ -206,75 +193,72 @@ const App: React.FC = () => {
         date: nowISO
       });
 
-      showToast("تم استلام العوائد اليومية", 'success');
-      await fetchAllUserData(session.user.id);
+      showToast("تم استلام الأرباح", 'success');
+      await fetchAllUserData(session.user.id, session.user.email || '');
     } catch (err: any) {
-      showToast("فشل استلام الأرباح، يرجى المحاولة لاحقاً", 'error');
+      showToast("خطأ في الاتصال", 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  if (loading) return (
-    <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center gap-4">
-      <div className="relative">
-        <Loader2 className="animate-spin text-blue-500" size={48} />
-        <Zap className="absolute inset-0 m-auto text-white fill-white" size={16} />
-      </div>
-      <div className="space-y-1 text-center">
-        <p className="text-white font-black text-xs uppercase tracking-widest italic">MINEPRO SECURITY CHECK</p>
-        <p className="text-slate-500 font-bold text-[10px] animate-pulse">تأمين الاتصال بالبروتوكول V-2...</p>
+  if (loading) return <ProtocolLoadingScreen />;
+
+  if (!session) return <AuthView lang={lang} t={t} showToast={showToast} />;
+
+  if (fetchError && !userData) return (
+    <div className="min-h-screen bg-[#020617] flex items-center justify-center p-10 text-center">
+      <div className="space-y-4">
+        <ShieldAlert className="text-red-500 mx-auto" size={48} />
+        <p className="text-white/80 font-bold text-sm">عذراً، فشل جلب بيانات البروتوكول</p>
+        <button onClick={() => window.location.reload()} className="w-full bg-blue-600 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase">إعادة المحاولة</button>
       </div>
     </div>
   );
 
-  if (!session) return <AuthView lang={lang} t={t} showToast={showToast} />;
+  if (!userData) return null;
 
   return (
     <div className={`min-h-screen pb-24 ${lang === 'ar' ? 'rtl font-["Cairo"]' : 'font-sans'} bg-[#020617] text-[#f8fafc] overflow-x-hidden relative`}>
-      {/* طبقة حماية أثناء المعالجة */}
       {isProcessing && (
-        <div className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-[#0b0f1a] p-6 rounded-3xl border border-white/10 flex flex-col items-center gap-4 shadow-2xl">
-            <Loader2 className="animate-spin text-blue-500" size={32} />
-            <p className="text-[10px] font-black uppercase tracking-widest text-white/60">جاري تأمين المعاملة...</p>
-          </div>
+        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center">
+          <Loader2 className="animate-spin text-blue-500" size={32} />
         </div>
       )}
 
       {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
-      {showRecharge && <RechargeModal t={t} onClose={() => setShowRecharge(false)} onDeposit={() => fetchAllUserData(session.user.id)} showToast={showToast} userId={session.user.id} />}
-      {showWithdraw && <WithdrawModal t={t} onClose={() => setShowWithdraw(false)} onWithdraw={() => fetchAllUserData(session.user.id)} max={userData!.withdrawableBalance} userId={session.user.id} balance={userData!.balance} showToast={showToast} isProcessing={isProcessing} />}
+      {showRecharge && <RechargeModal t={t} onClose={() => setShowRecharge(false)} onDeposit={() => fetchAllUserData(session.user.id, session.user.email || '')} showToast={showToast} userId={session.user.id} />}
+      {showWithdraw && <WithdrawModal t={t} onClose={() => setShowWithdraw(false)} onWithdraw={() => fetchAllUserData(session.user.id, session.user.email || '')} max={userData.withdrawableBalance} userId={session.user.id} balance={userData.balance} showToast={showToast} isProcessing={isProcessing} />}
       {showSupport && <SupportChatModal lang={lang} t={t} onClose={() => setShowSupport(false)} userId={session.user.id} />}
       
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-full max-w-[85%] space-y-2 pointer-events-none">
         {toasts.map(toast => (
-          <div key={toast.id} className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl pointer-events-auto backdrop-blur-3xl border border-white/10 ${toast.type === 'error' ? 'bg-red-500/20 text-red-200' : toast.type === 'success' ? 'bg-emerald-500/20 text-emerald-100' : 'bg-slate-900/80'}`}>
+          <div key={toast.id} className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl pointer-events-auto backdrop-blur-3xl border border-white/10 ${toast.type === 'error' ? 'bg-red-500/20 text-red-200' : 'bg-emerald-500/20 text-emerald-100'}`}>
             <span className="text-[12px] font-bold">{toast.message}</span>
           </div>
         ))}
       </div>
 
-      <header className="px-4 py-4 border-b border-white/5 backdrop-blur-xl sticky top-0 z-40 bg-[#020617]/80 flex justify-between items-center shadow-lg">
+      <header className="px-4 py-4 border-b border-white/5 backdrop-blur-xl sticky top-0 z-40 bg-[#020617]/80 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg"><Zap size={18} className="text-white fill-white" /></div>
           <span className="font-black italic text-lg tracking-tighter uppercase">MINE<span className="text-blue-500">PRO</span></span>
         </div>
         <div className="flex gap-1.5 items-center">
-          <button onClick={handleManualRefresh} disabled={syncing || isProcessing} className={`p-2 bg-blue-500/10 text-blue-400 rounded-xl active:scale-90 transition-all ${syncing ? 'animate-spin opacity-50' : ''}`}><RefreshCw size={18} /></button>
-          <button onClick={() => setShowSupport(true)} className="p-2 bg-blue-500/10 text-blue-500 rounded-xl relative"><MessageCircle size={18}/></button>
-          <button onClick={() => supabase.auth.signOut()} className="p-2 bg-red-500/10 text-red-500 rounded-xl active:scale-90 transition-all"><LogOut size={18} /></button>
+          <button onClick={handleManualRefresh} disabled={syncing} className={`p-2 bg-blue-500/10 text-blue-400 rounded-xl ${syncing ? 'animate-spin opacity-50' : ''}`}><RefreshCw size={18} /></button>
+          <button onClick={() => setShowSupport(true)} className="p-2 bg-blue-500/10 text-blue-500 rounded-xl"><MessageCircle size={18}/></button>
+          <button onClick={() => supabase.auth.signOut()} className="p-2 bg-red-500/10 text-red-500 rounded-xl"><LogOut size={18} /></button>
         </div>
       </header>
 
       <main className="max-w-md mx-auto p-4 space-y-6 relative z-10">
         <Routes>
-          <Route path="/" element={<HomeView user={userData!} t={t} onShowInfo={() => setShowInfo(true)} onShowRecharge={() => setShowRecharge(true)} onShowWithdraw={() => setShowWithdraw(true)} syncing={syncing} />} />
-          <Route path="/machines" element={<MachinesView user={userData!} onBuy={buyMachine} t={t} isProcessing={isProcessing} />} />
-          <Route path="/tasks" element={<TasksView user={userData!} onComplete={completeTask} t={t} isProcessing={isProcessing} />} />
-          <Route path="/team" element={<TeamView user={userData!} t={t} />} />
-          <Route path="/profile" element={<ProfileView user={userData!} t={t} />} />
-          {userData!.email === ADMIN_EMAIL && <Route path="/admin" element={<AdminView t={t} showToast={showToast} />} />}
+          <Route path="/" element={<HomeView user={userData} t={t} onShowInfo={() => setShowInfo(true)} onShowRecharge={() => setShowRecharge(true)} onShowWithdraw={() => setShowWithdraw(true)} syncing={syncing} />} />
+          <Route path="/machines" element={<MachinesView user={userData} onBuy={buyMachine} t={t} isProcessing={isProcessing} />} />
+          <Route path="/tasks" element={<TasksView user={userData} onComplete={completeTask} t={t} isProcessing={isProcessing} />} />
+          <Route path="/team" element={<TeamView user={userData} t={t} />} />
+          <Route path="/profile" element={<ProfileView user={userData} t={t} />} />
+          {userData?.email === ADMIN_EMAIL && <Route path="/admin" element={<AdminView t={t} showToast={showToast} />} />}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
@@ -284,7 +268,7 @@ const App: React.FC = () => {
           <NavItem icon={HomeIcon} label={t('home')} active={location.pathname === '/'} onClick={() => navigate('/')} />
           <NavItem icon={Cpu} label={t('machines')} active={location.pathname === '/machines'} onClick={() => navigate('/machines')} />
           <NavItem icon={ListTodo} label={t('tasks')} active={location.pathname === '/tasks'} onClick={() => navigate('/tasks')} />
-          {userData!.email === ADMIN_EMAIL ? (
+          {userData?.email === ADMIN_EMAIL ? (
             <NavItem icon={Settings} label={t('adminTool')} active={location.pathname === '/admin'} onClick={() => navigate('/admin')} />
           ) : (
             <NavItem icon={Users} label={t('team')} active={location.pathname === '/team'} onClick={() => navigate('/team')} />
@@ -296,11 +280,25 @@ const App: React.FC = () => {
   );
 };
 
-// مكون التنقل المصغر
+const ProtocolLoadingScreen = () => (
+  <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center gap-6 p-10">
+    <div className="relative">
+      <div className="w-24 h-24 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin"></div>
+      <Zap className="absolute inset-0 m-auto text-blue-500 fill-blue-500" size={32} />
+    </div>
+    <div className="space-y-2 text-center">
+      <p className="text-white font-black text-xl uppercase italic tracking-tighter">MINEPRO V-2</p>
+      <div className="flex gap-1 justify-center">
+        {[1,2,3].map(i => <div key={i} className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: `${i*0.2}s`}}></div>)}
+      </div>
+    </div>
+  </div>
+);
+
 const NavItem = ({ icon: Icon, label, active, onClick }: any) => (
-  <button onClick={onClick} className={`flex flex-col items-center gap-1 transition-all group ${active ? 'text-blue-500 -translate-y-1' : 'text-slate-700'}`}>
-    <div className={`p-2 rounded-lg transition-all ${active ? 'bg-blue-600/10 shadow-lg border border-blue-500/20' : ''}`}><Icon size={18} strokeWidth={active ? 2.5 : 2} /></div>
-    <span className={`text-[8px] font-black uppercase tracking-widest transition-all ${active ? 'opacity-100' : 'opacity-30'}`}>{label}</span>
+  <button onClick={onClick} className={`flex flex-col items-center gap-1 transition-all ${active ? 'text-blue-500' : 'text-slate-700'}`}>
+    <div className={`p-2 rounded-lg ${active ? 'bg-blue-600/10' : ''}`}><Icon size={18} /></div>
+    <span className="text-[8px] font-black uppercase tracking-widest">{label}</span>
   </button>
 );
 
@@ -309,53 +307,40 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, syncing
     <div className="flex justify-between items-end flex-row-reverse px-1">
       <div className="space-y-0.5">
         <h2 className="text-xl font-black italic text-white leading-none">أهلاً، {user.first_name}</h2>
-        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Protocol ID: {user.referral_code}</p>
+        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">ID: {user.referral_code}</p>
       </div>
-      <div className={`px-3 py-1.5 rounded-full flex items-center gap-2 border transition-all ${syncing ? 'bg-blue-500/10 border-blue-500/20' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
-         <div className={`w-1.5 h-1.5 rounded-full animate-pulse shadow-md ${syncing ? 'bg-blue-500 shadow-blue-500/50' : 'bg-emerald-500 shadow-emerald-500/50'}`}></div>
+      <div className={`px-3 py-1.5 rounded-full flex items-center gap-2 border ${syncing ? 'bg-blue-500/10 border-blue-500/20' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
+         <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${syncing ? 'bg-blue-500' : 'bg-emerald-500'}`}></div>
          <span className={`text-[9px] font-black uppercase ${syncing ? 'text-blue-500' : 'text-emerald-500'}`}>
-            {syncing ? 'جاري المزامنة...' : 'متصل بالبروتوكول'}
+            {syncing ? 'جاري المزامنة...' : 'متصل'}
          </span>
       </div>
     </div>
 
-    <div className="relative group">
-      <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl blur opacity-20"></div>
-      <div className="relative bg-[#0b0f1a] border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col justify-between overflow-hidden">
-        <div className="relative z-10 space-y-6">
-          <div className="flex justify-between items-center">
-            <p className="text-white/40 font-black text-[10px] uppercase tracking-widest italic">{t('balanceTitle')}</p>
-            <button onClick={onShowInfo} className="bg-white/5 px-2.5 py-1.5 rounded-lg border border-white/10 text-white/90 text-[10px] font-bold flex items-center gap-1.5"><HelpCircle size={14} className="text-blue-500" /> نموذجنا</button>
-          </div>
-          <div className="text-right">
-             <h2 className="text-5xl font-black tracking-tighter text-white leading-none">{Number(user.balance).toFixed(2)}<span className="text-sm text-blue-500 italic ml-2">USDT</span></h2>
-          </div>
+    <div className="relative bg-[#0b0f1a] border border-white/10 rounded-3xl p-6 shadow-2xl space-y-6 overflow-hidden">
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <p className="text-white/40 font-black text-[10px] uppercase tracking-widest italic">{t('balanceTitle')}</p>
+          <button onClick={onShowInfo} className="bg-white/5 px-2.5 py-1.5 rounded-lg border border-white/10 text-white/90 text-[10px] font-bold flex items-center gap-1.5"><HelpCircle size={14} className="text-blue-500" /> نموذجنا</button>
         </div>
-        <div className="flex gap-3 relative z-10 mt-6">
-          <button onClick={onShowRecharge} className="flex-1 bg-white text-black font-black py-3.5 rounded-xl flex items-center justify-center gap-2 text-[12px] uppercase active:scale-95 transition-all shadow-xl"><ArrowDownCircle size={18} className="text-blue-600" /> {t('recharge')}</button>
-          <button onClick={onShowWithdraw} className="flex-1 bg-blue-600 text-white font-black py-3.5 rounded-xl flex items-center justify-center gap-2 text-[12px] uppercase active:scale-95 transition-all shadow-xl"><ArrowUpCircle size={18} /> {t('withdraw')}</button>
+        <div className="text-right">
+           <h2 className="text-5xl font-black tracking-tighter text-white leading-none">{Number(user.balance).toFixed(2)}<span className="text-sm text-blue-500 italic ml-2">USDT</span></h2>
         </div>
       </div>
-    </div>
-
-    <div className="bg-gradient-to-br from-slate-900 to-black border border-white/5 p-5 rounded-2xl space-y-3 text-right shadow-xl">
-       <div className="flex items-center gap-2 flex-row-reverse">
-          <ShieldCheck className="text-emerald-500" size={20} />
-          <h3 className="text-sm font-black text-white uppercase italic">نظام آمن ومحمي</h3>
-       </div>
-       <p className="text-[11px] text-slate-400 font-medium leading-relaxed italic">
-          يستخدم بروتوكول MINEPRO تقنيات التشفير المتقدمة لضمان أمان أصولكم الرقمية. يتم تسييل الأرباح عبر شبكة موزعة عالمياً لضمان استمرارية العوائد العالية بأعلى مستويات الخصوصية.
-       </p>
+      <div className="flex gap-3 mt-6">
+        <button onClick={onShowRecharge} className="flex-1 bg-white text-black font-black py-3.5 rounded-xl flex items-center justify-center gap-2 text-[12px] uppercase shadow-xl"><ArrowDownCircle size={18} className="text-blue-600" /> {t('recharge')}</button>
+        <button onClick={onShowWithdraw} className="flex-1 bg-blue-600 text-white font-black py-3.5 rounded-xl flex items-center justify-center gap-2 text-[12px] uppercase shadow-xl"><ArrowUpCircle size={18} /> {t('withdraw')}</button>
+      </div>
     </div>
 
     <div className="space-y-4 text-right">
        <h3 className="text-[10px] font-black uppercase text-slate-600 tracking-widest px-1">{t('history')}</h3>
        <div className="space-y-2.5">
          {user.transactions.slice(0, 5).map((tx: Transaction) => (
-           <div key={tx.id} className="bg-[#0b0f1a] border border-white/5 p-4 rounded-xl flex justify-between items-center flex-row-reverse shadow-lg">
+           <div key={tx.id} className="bg-[#0b0f1a] border border-white/5 p-4 rounded-xl flex justify-between items-center flex-row-reverse">
               <div className="flex gap-3 flex-row-reverse items-center">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${tx.type === 'deposit' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : tx.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-blue-500/10 text-blue-500 border-blue-500/20'}`}>
-                  {tx.status === 'pending' ? <Clock size={18}/> : tx.type === 'task' ? <TrendingUp size={18}/> : <ArrowDownCircle size={18}/>}
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${tx.type === 'deposit' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : tx.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : tx.status === 'completed' ? 'bg-blue-500/10 text-blue-500' : 'bg-red-500/10 text-red-500'}`}>
+                  {tx.status === 'pending' ? <Clock size={18}/> : tx.type === 'task' ? <TrendingUp size={18}/> : <Activity size={18}/>}
                 </div>
                 <div className="text-right">
                    <p className="text-[12px] font-black text-white uppercase italic leading-none">{tx.type === 'task' ? 'عائد تسييل' : tx.type === 'deposit' ? 'إيداع' : 'سحب'}</p>
@@ -379,13 +364,13 @@ const MachinesView = ({ user, onBuy, t, isProcessing }: any) => (
       {MACHINES.map((m: any) => {
         const owned = user.ownedMachines.some((om: any) => om.machine_id === m.id);
         return (
-          <div key={m.id} className={`relative bg-gradient-to-br from-slate-900 to-black border ${owned ? 'border-blue-500/40 shadow-blue-500/5' : 'border-white/5'} rounded-2xl p-4 shadow-xl overflow-hidden`}>
+          <div key={m.id} className="relative bg-[#0b0f1a] border border-white/5 rounded-2xl p-4 shadow-xl overflow-hidden">
             <div className="flex justify-between items-center flex-row-reverse mb-4 relative z-10">
                  <div className="flex gap-3 flex-row-reverse items-center">
-                    <div className={`w-12 h-12 bg-gradient-to-br ${m.color} rounded-xl flex items-center justify-center border border-white/10 shadow-lg`}><Gem size={24} className="text-white" /></div>
+                    <div className={`w-12 h-12 bg-gradient-to-br ${m.color} rounded-xl flex items-center justify-center border border-white/10`}><Gem size={24} className="text-white" /></div>
                     <div className="text-right">
                        <h3 className="font-black text-[13px] text-white uppercase italic leading-none">{m.name}</h3>
-                       <p className="text-[8px] text-white/30 font-bold mt-1 tracking-widest">Protocol Sync Node</p>
+                       <p className="text-[8px] text-white/30 font-bold mt-1 tracking-widest">Protocol Node</p>
                     </div>
                  </div>
                  <div className="text-left">
@@ -394,16 +379,16 @@ const MachinesView = ({ user, onBuy, t, isProcessing }: any) => (
                  </div>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-4 relative z-10">
-              <div className="bg-white/5 p-3 rounded-xl text-right border border-white/5">
+              <div className="bg-white/5 p-3 rounded-xl text-right">
                 <p className="text-[8px] font-black uppercase text-slate-600 mb-1">الربح اليومي</p>
                 <p className="text-lg font-black text-emerald-500 italic">+{m.dailyProfit}</p>
               </div>
-              <div className="bg-white/5 p-3 rounded-xl text-right border border-white/5">
-                <p className="text-[8px] font-black uppercase text-slate-600 mb-1">مدة العقد</p>
-                <p className="text-lg font-black text-white italic">{m.duration} <span className="text-[10px]">يوم</span></p>
+              <div className="bg-white/5 p-3 rounded-xl text-right">
+                <p className="text-[8px] font-black uppercase text-slate-600 mb-1">المدة</p>
+                <p className="text-lg font-black text-white italic">{m.duration} ي</p>
               </div>
             </div>
-            <button onClick={() => onBuy(m)} disabled={owned || isProcessing} className={`w-full py-3.5 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all ${owned ? 'bg-slate-900 text-slate-700' : 'bg-white text-black active:scale-95 disabled:opacity-50'}`}>
+            <button onClick={() => onBuy(m)} disabled={owned || isProcessing} className={`w-full py-3.5 rounded-xl font-black text-[11px] uppercase tracking-widest ${owned ? 'bg-slate-900 text-slate-700' : 'bg-white text-black active:scale-95 disabled:opacity-50'}`}>
               {owned ? 'العقد مفعل' : 'تفعيل العقد'}
             </button>
           </div>
@@ -413,7 +398,6 @@ const MachinesView = ({ user, onBuy, t, isProcessing }: any) => (
   </div>
 );
 
-// عداد تنازلي دقيق
 const CountdownTimer = ({ lastClaimDate, onFinish }: { lastClaimDate: string | null, onFinish: () => void }) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
 
@@ -455,21 +439,18 @@ const TasksView = ({ user, onComplete, t, isProcessing }: any) => {
     <div className="space-y-6 animate-in fade-in duration-500">
       <h2 className="text-xl font-black italic uppercase text-white flex items-center gap-3 flex-row-reverse px-1"><ListTodo className="text-blue-500" size={24}/> {t('tasks')}</h2>
       <div className="space-y-4">
-          {user.ownedMachines.map((um: UserMachine) => {
+          {(user.ownedMachines || []).map((um: UserMachine) => {
             const m = MACHINES.find(x => x.id === um.machine_id);
             const lastClaim = um.last_claim_date ? new Date(um.last_claim_date).getTime() : 0;
             const now = Date.now();
             const isLocked = um.last_claim_date && (now - lastClaim < 24 * 60 * 60 * 1000);
 
             return (
-              <div key={um.id} className={`bg-[#0b0f1a] border ${isLocked ? 'border-white/5' : 'border-emerald-500/20 shadow-emerald-500/5'} rounded-2xl p-4 shadow-xl text-right`}>
+              <div key={um.id} className={`bg-[#0b0f1a] border ${isLocked ? 'border-white/5' : 'border-emerald-500/20'} rounded-2xl p-4 shadow-xl text-right`}>
                 <div className="flex justify-between items-center flex-row-reverse mb-4">
                   <div className="text-right">
-                    <div className="flex items-center gap-2 flex-row-reverse">
-                      <h4 className="font-black text-sm text-white uppercase italic">{m?.name}</h4>
-                      {isLocked && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping"></div>}
-                    </div>
-                    <p className="text-[8px] text-slate-700 font-bold mt-1 uppercase">Node Active • {um.remaining_days} days left</p>
+                    <h4 className="font-black text-sm text-white uppercase italic">{m?.name}</h4>
+                    <p className="text-[8px] text-slate-700 font-bold mt-1 uppercase">Active • {um.remaining_days} days</p>
                   </div>
                   <div className={`text-left font-black italic text-lg ${isLocked ? 'text-slate-800' : 'text-emerald-500'}`}>
                     +{m?.dailyProfit}
@@ -479,7 +460,7 @@ const TasksView = ({ user, onComplete, t, isProcessing }: any) => {
                 <button 
                   disabled={isLocked || isProcessing} 
                   onClick={() => onComplete(um)} 
-                  className={`w-full py-4 rounded-xl font-black uppercase text-[11px] tracking-widest transition-all relative overflow-hidden ${isLocked ? 'bg-slate-900/50 text-slate-500 border border-white/5' : 'bg-emerald-600 text-white active:scale-95 shadow-lg'}`}
+                  className={`w-full py-4 rounded-xl font-black uppercase text-[11px] tracking-widest transition-all ${isLocked ? 'bg-slate-900/50 text-slate-500' : 'bg-emerald-600 text-white active:scale-95 shadow-lg'}`}
                 >
                   {isLocked ? (
                     <CountdownTimer lastClaimDate={um.last_claim_date} onFinish={() => {}} />
@@ -493,7 +474,7 @@ const TasksView = ({ user, onComplete, t, isProcessing }: any) => {
               </div>
             );
           })}
-          {user.ownedMachines.length === 0 && <div className="py-20 text-center text-slate-700 font-bold uppercase italic text-xs">لا توجد عقود نشطة حالياً</div>}
+          {(!user.ownedMachines || user.ownedMachines.length === 0) && <div className="py-20 text-center text-slate-700 font-bold uppercase italic text-xs">لا توجد عقود نشطة</div>}
       </div>
     </div>
   );
@@ -504,9 +485,9 @@ const TeamView = ({ user, t }: any) => (
     <h2 className="text-xl font-black italic uppercase text-white flex items-center gap-3 flex-row-reverse px-1"><Users className="text-blue-500" size={24}/> {t('team')}</h2>
     <div className="bg-[#0b0f1a] border border-white/10 rounded-3xl p-6 shadow-xl space-y-6">
       <div className="text-right space-y-2">
-        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">كود الإحالة الخاص بك</p>
+        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">كود الإحالة</p>
         <div className="bg-black/40 p-4 rounded-xl flex items-center gap-3 border border-white/5">
-          <button onClick={() => {navigator.clipboard.writeText(user.referral_code); alert('تم نسخ الكود')}} className="p-3 bg-blue-600 text-white rounded-xl active:scale-90 shadow-lg"><Copy size={18}/></button>
+          <button onClick={() => {navigator.clipboard.writeText(user.referral_code); alert('تم النسخ')}} className="p-3 bg-blue-600 text-white rounded-xl shadow-lg"><Copy size={18}/></button>
           <span className="text-sm font-mono text-white flex-1 text-center tracking-widest">{user.referral_code}</span>
         </div>
       </div>
@@ -516,7 +497,7 @@ const TeamView = ({ user, t }: any) => (
           <p className="text-2xl font-black text-emerald-500 italic">{Number(user.referralEarnings).toFixed(2)}</p>
         </div>
         <div className="bg-white/5 p-4 rounded-2xl text-right border border-white/5">
-          <p className="text-[9px] font-black text-slate-500 uppercase mb-1">نسبة الربح</p>
+          <p className="text-[9px] font-black text-slate-500 uppercase mb-1">النسبة</p>
           <p className="text-2xl font-black text-blue-500 italic">10%</p>
         </div>
       </div>
@@ -529,9 +510,9 @@ const ProfileView = ({ user, t }: any) => (
     <div className="relative p-6 bg-[#0b0f1a] border border-white/10 rounded-3xl shadow-xl flex items-center gap-6 flex-row-reverse justify-between">
        <div className="space-y-2 text-right z-10">
           <h3 className="text-2xl font-black italic text-white leading-tight">{user.first_name}<br/>{user.last_name}</h3>
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600/10 border border-blue-500/30 rounded-lg shadow-lg">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600/10 border border-blue-500/30 rounded-lg">
              <ShieldCheck size={14} className="text-blue-500" />
-             <span className="text-[9px] font-black uppercase text-blue-500 tracking-widest">Protocol Elite Member</span>
+             <span className="text-[9px] font-black uppercase text-blue-500 tracking-widest">Elite Member</span>
           </div>
        </div>
        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-800 border-4 border-[#020617] shadow-xl flex items-center justify-center p-2">
@@ -539,12 +520,12 @@ const ProfileView = ({ user, t }: any) => (
        </div>
     </div>
     <div className="grid grid-cols-2 gap-4">
-      <div className="bg-[#0b0f1a] border border-white/10 rounded-2xl p-5 text-right shadow-lg">
-         <p className="text-[9px] text-slate-700 font-black uppercase mb-1 leading-none">إجمالي السحوبات</p>
+      <div className="bg-[#0b0f1a] border border-white/10 rounded-2xl p-5 text-right">
+         <p className="text-[9px] text-slate-700 font-black uppercase mb-1 leading-none">إجمالي السحب</p>
          <p className="text-2xl font-black text-red-500 italic leading-none">{Number(user.totalWithdraw).toFixed(2)}</p>
       </div>
-      <div className="bg-[#0b0f1a] border border-white/10 rounded-2xl p-5 text-right shadow-lg">
-         <p className="text-[9px] text-slate-700 font-black uppercase mb-1 leading-none">إجمالي الإيداعات</p>
+      <div className="bg-[#0b0f1a] border border-white/10 rounded-2xl p-5 text-right">
+         <p className="text-[9px] text-slate-700 font-black uppercase mb-1 leading-none">إجمالي الإيداع</p>
          <p className="text-2xl font-black text-emerald-500 italic leading-none">{Number(user.totalRecharge).toFixed(2)}</p>
       </div>
     </div>
@@ -554,11 +535,27 @@ const ProfileView = ({ user, t }: any) => (
 const AuthView = ({ lang, t, showToast }: any) => {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [handshakeTime, setHandshakeTime] = useState(0);
   const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', password: '', referralCode: '' });
   
+  useEffect(() => {
+    let interval: any;
+    if (loading && handshakeTime < 100) {
+      interval = setInterval(() => {
+        setHandshakeTime(prev => Math.min(prev + 2, 100));
+      }, 50);
+    }
+    return () => clearInterval(interval);
+  }, [loading, handshakeTime]);
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setHandshakeTime(0);
+    
+    // Simulate security delay for visual impact
+    await new Promise(r => setTimeout(r, 2000));
+
     try {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ 
@@ -566,7 +563,7 @@ const AuthView = ({ lang, t, showToast }: any) => {
           password: formData.password 
         });
         if (error) { 
-           showToast("البريد أو كلمة المرور غير صحيحة", 'error'); 
+           showToast("خطأ في البيانات", 'error'); 
            setLoading(false); 
         }
       } else {
@@ -576,10 +573,28 @@ const AuthView = ({ lang, t, showToast }: any) => {
           options: { data: { first_name: formData.firstName, last_name: formData.lastName, referred_by: formData.referralCode } }
         });
         if (error) { showToast(error.message, 'error'); setLoading(false); }
-        else { showToast('تم إنشاء الحساب، يرجى تسجيل الدخول', 'success'); setIsLogin(true); setLoading(false); }
+        else { showToast('تم الحساب، سجل دخولك', 'success'); setIsLogin(true); setLoading(false); }
       }
-    } catch (err: any) { showToast("فشل الاتصال بالخادم", 'error'); setLoading(false); }
+    } catch (err: any) { showToast("فشل الاتصال", 'error'); setLoading(false); }
   };
+
+  if (loading) return (
+    <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-10 space-y-8 animate-in fade-in">
+       <div className="relative">
+          <div className="w-32 h-32 rounded-full border-2 border-blue-500/10 flex items-center justify-center">
+             <div className="absolute inset-0 border-t-2 border-blue-500 rounded-full animate-spin"></div>
+             <span className="text-2xl font-black text-blue-500 italic font-mono">{handshakeTime}%</span>
+          </div>
+       </div>
+       <div className="text-center space-y-2">
+          <p className="text-white font-black uppercase text-xs tracking-widest italic animate-pulse">Security Handshake...</p>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Encrypting Protocol Sync</p>
+       </div>
+       <div className="w-full max-w-[200px] h-1 bg-white/5 rounded-full overflow-hidden">
+          <div className="h-full bg-blue-600 transition-all duration-300" style={{width: `${handshakeTime}%`}}></div>
+       </div>
+    </div>
+  );
 
   return (
     <div className={`min-h-screen bg-[#020617] p-6 flex flex-col justify-center ${lang === 'ar' ? 'rtl' : ''}`}>
@@ -590,7 +605,7 @@ const AuthView = ({ lang, t, showToast }: any) => {
         </div>
         <div className="bg-[#0b0f1a] border border-white/10 rounded-3xl p-7 shadow-2xl space-y-7">
           <div className="flex bg-[#020617] p-1 rounded-xl border border-white/5">
-            <button onClick={() => setIsLogin(true)} className={`flex-1 py-3 rounded-lg font-black text-[10px] transition-all uppercase tracking-widest ${isLogin ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-800'}`}>دخول</button>
+            <button onClick={() => setIsLogin(true)} className={`flex-1 py-3 rounded-lg font-black text-[10px] transition-all uppercase tracking-widest ${isLogin ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-600'}`}>دخول</button>
             <button onClick={() => setIsLogin(false)} className={`flex-1 py-3 rounded-lg font-black text-[10px] transition-all uppercase tracking-widest ${!isLogin ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-800'}`}>تسجيل</button>
           </div>
           <form onSubmit={handleAuth} className="space-y-4">
@@ -598,7 +613,7 @@ const AuthView = ({ lang, t, showToast }: any) => {
             <Input icon={Mail} type="email" placeholder="البريد الإلكتروني" value={formData.email} onChange={(v: string) => setFormData({...formData, email: v})} />
             <Input icon={Key} type="password" placeholder="كلمة المرور" value={formData.password} onChange={(v: string) => setFormData({...formData, password: v})} />
             <button disabled={loading} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase tracking-widest text-[11px] shadow-2xl active:scale-95 transition-all flex justify-center items-center disabled:opacity-50">
-              {loading ? <Loader2 className="animate-spin text-blue-600" size={18} /> : (isLogin ? 'دخول النظام' : 'تفعيل العضوية')}
+              دخول النظام
             </button>
           </form>
         </div>
@@ -610,7 +625,7 @@ const AuthView = ({ lang, t, showToast }: any) => {
 const Input = ({ icon: Icon, type = "text", placeholder, value, onChange }: any) => (
   <div className="relative group">
     <div className="absolute inset-y-0 right-4 flex items-center text-slate-800 group-focus-within:text-blue-500 transition-colors"><Icon size={18} /></div>
-    <input type={type} required placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-[#020617] border border-white/5 pr-11 pl-4 py-3.5 rounded-xl text-xs font-bold outline-none focus:border-blue-500/40 text-white shadow-inner placeholder:text-slate-800" />
+    <input type={type} required placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-[#020617] border border-white/5 pr-11 pl-4 py-3.5 rounded-xl text-xs font-bold outline-none focus:border-blue-500/40 text-white placeholder:text-slate-800" />
   </div>
 );
 
@@ -619,7 +634,7 @@ const AdminView = ({ t, showToast }: any) => {
   const [txs, setTxs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'deposits' | 'withdrawals' | 'users'>('deposits');
-  const [subTab, setSubTab] = useState<'pending' | 'resolved'>('pending');
+  const [historyMode, setHistoryMode] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -628,19 +643,10 @@ const AdminView = ({ t, showToast }: any) => {
         supabase.from('profiles').select('*'),
         supabase.from('transactions').select('*').order('date', { ascending: false })
       ]);
-
       if (profilesRes.data) setUsers(profilesRes.data);
-      
-      if (txsRes.data && profilesRes.data) {
-        const profileMap = new Map(profilesRes.data.map(p => [p.id, p]));
-        const merged = txsRes.data.map(tx => ({
-          ...tx,
-          profiles: profileMap.get(tx.user_id) || { first_name: 'Unknown', last_name: 'User' }
-        }));
-        setTxs(merged);
-      }
+      if (txsRes.data) setTxs(txsRes.data);
     } catch (e) { 
-      showToast("خطأ في جلب بيانات الإدارة", "error"); 
+      showToast("خطأ في الجلب", "error"); 
     } finally { 
       setLoading(false); 
     }
@@ -654,96 +660,92 @@ const AdminView = ({ t, showToast }: any) => {
     
     try {
       if (tx.type === 'deposit' && newStatus === 'completed') {
-        await supabase.from('profiles').update({ balance: user.balance + tx.amount, total_recharge: user.total_recharge + tx.amount }).eq('id', tx.user_id);
+        await supabase.from('profiles').update({ balance: user.balance + tx.amount, total_recharge: (user.total_recharge || 0) + tx.amount }).eq('id', tx.user_id);
       }
       if (tx.type === 'withdrawal' && newStatus === 'failed') {
-         await supabase.from('profiles').update({ balance: user.balance + Math.abs(tx.amount), withdrawable_balance: user.withdrawable_balance + Math.abs(tx.amount) }).eq('id', tx.user_id);
+         await supabase.from('profiles').update({ balance: user.balance + Math.abs(tx.amount), withdrawable_balance: (user.withdrawable_balance || 0) + Math.abs(tx.amount) }).eq('id', tx.user_id);
       }
       await supabase.from('transactions').update({ status: newStatus }).eq('id', tx.id);
       fetchData();
-      showToast(`تم تحديث الحالة بنجاح`, 'success');
+      showToast(`تم التحديث`, 'success');
     } catch (e) {
-      showToast("فشل تحديث المعاملة", "error");
+      showToast("فشل التحديث", "error");
     }
   };
 
   if (loading) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-blue-500" /></div>;
 
+  const filteredTxs = txs.filter(t => {
+    const typeMatch = t.type === (tab === 'deposits' ? 'deposit' : 'withdrawal');
+    const statusMatch = historyMode ? (t.status === 'completed' || t.status === 'failed') : t.status === 'pending';
+    return typeMatch && statusMatch;
+  });
+
   return (
     <div className="space-y-6 animate-in fade-in">
-      <div className="flex justify-between items-center px-1">
-         <h2 className="text-xl font-black italic text-white uppercase flex items-center gap-2 flex-row-reverse"><Settings className="text-blue-500" size={24} /> التحكم بالإدارة</h2>
-         <button onClick={fetchData} className="p-3 bg-white/5 rounded-xl text-blue-500 active:bg-white/10 transition-all"><RefreshCw size={18}/></button>
-      </div>
-
       <div className="flex bg-[#0b0f1a] p-1 rounded-2xl border border-white/10 shadow-xl overflow-x-auto no-scrollbar">
         {['deposits', 'withdrawals', 'users'].map((t: any) => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-1 py-3 rounded-lg font-black text-[9px] uppercase transition-all px-4 ${tab === t ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-600'}`}>{t === 'deposits' ? 'إيداع' : t === 'withdrawals' ? 'سحب' : 'أعضاء'}</button>
+          <button key={t} onClick={() => setTab(t)} className={`flex-1 py-3 rounded-lg font-black text-[9px] uppercase px-4 ${tab === t ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-600'}`}>{t === 'deposits' ? 'إيداع' : t === 'withdrawals' ? 'سحب' : 'أعضاء'}</button>
         ))}
       </div>
 
       {(tab === 'deposits' || tab === 'withdrawals') && (
-        <div className="space-y-4">
-          <div className="flex justify-center gap-2 bg-[#020617] p-1 rounded-xl border border-white/5 max-w-[200px] mx-auto shadow-inner">
-             <button onClick={() => setSubTab('pending')} className={`flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all ${subTab === 'pending' ? 'bg-blue-500/10 text-blue-500' : 'text-slate-700'}`}>جديد</button>
-             <button onClick={() => setSubTab('resolved')} className={`flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all ${subTab === 'resolved' ? 'bg-white/5 text-slate-500' : 'text-slate-700'}`}>السجل</button>
-          </div>
-          
-          {txs.filter(t => t.type === (tab === 'deposits' ? 'deposit' : 'withdrawal') && (subTab === 'pending' ? t.status === 'pending' : t.status !== 'pending')).map(t => (
+        <div className="flex bg-[#020617] p-1 rounded-xl border border-white/5 w-fit mx-auto">
+          <button onClick={() => setHistoryMode(false)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${!historyMode ? 'bg-blue-600 text-white' : 'text-slate-700'}`}>الطلبات الجديدة</button>
+          <button onClick={() => setHistoryMode(true)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${historyMode ? 'bg-blue-600 text-white' : 'text-slate-700'}`}>السجل</button>
+        </div>
+      )}
+
+      <div className="space-y-4">
+          {filteredTxs.map(t => (
             <div key={t.id} className="bg-[#0b0f1a] border border-white/5 p-5 rounded-2xl text-right space-y-4 shadow-xl">
-               <div className="flex justify-between items-center flex-row-reverse">
-                  <div className="text-right">
-                    <h5 className="font-black text-white italic text-base leading-none">{t.profiles?.first_name} {t.profiles?.last_name}</h5>
-                    <p className="text-[9px] text-slate-600 mt-1 leading-none font-mono">{t.profiles?.email}</p>
+               <div className="flex justify-between items-center flex-row-reverse border-b border-white/5 pb-4">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-500 uppercase italic">المبلغ</p>
+                    <div className="text-left font-black italic text-2xl text-white">{Math.abs(t.amount)} USDT</div>
                   </div>
-                  <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-full border ${t.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{t.status === 'pending' ? 'قيد المراجعة' : t.status === 'completed' ? 'تم القبول' : 'مرفوض'}</span>
+                  {historyMode && (
+                    <span className={`px-2 py-1 rounded text-[8px] font-black uppercase ${t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                      {t.status === 'completed' ? 'تم القبول' : 'مرفوض'}
+                    </span>
+                  )}
                </div>
-               
-               <div className="flex justify-between items-center flex-row-reverse border-t border-white/5 pt-4">
-                  <p className="text-[9px] font-black text-slate-500 uppercase italic leading-none">المبلغ</p>
-                  <div className="text-left font-black italic text-2xl text-white leading-none">{Math.abs(t.amount)} <span className="text-[10px]">USDT</span></div>
-               </div>
-
-               {t.type === 'withdrawal' && t.details && (
-                 <div className="bg-black/40 p-3 rounded-xl border border-white/5 space-y-2">
-                    <p className="text-[8px] font-black text-slate-500 uppercase">عنوان المحفظة (BEP20)</p>
-                    <p className="text-[10px] font-mono text-blue-400 break-all text-left bg-black/20 p-2 rounded-lg">{t.details.replace('Addr: ', '')}</p>
-                 </div>
-               )}
-
+               {t.details && <p className="text-[10px] font-mono text-blue-400 break-all bg-black/40 p-2 rounded-lg">{t.details}</p>}
                {t.proof_url && (
-                 <div className="relative mt-2 rounded-xl overflow-hidden border border-white/10 bg-black cursor-zoom-in" onClick={() => window.open(t.proof_url, '_blank')}>
-                    <img src={t.proof_url} className="w-full h-auto max-h-40 object-contain" alt="Proof" />
-                 </div>
+                <div className="relative group cursor-pointer" onClick={() => window.open(t.proof_url, '_blank')}>
+                   <img src={t.proof_url} className="w-full h-auto max-h-48 object-contain rounded-xl border border-white/10" alt="Proof" />
+                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                      <ExternalLink className="text-white" size={24} />
+                   </div>
+                </div>
                )}
-
-               {t.status === 'pending' && (
-                 <div className="flex gap-2 pt-2">
-                    <button onClick={() => handleAction(t, 'completed')} className="flex-[2] bg-white text-black font-black py-3.5 rounded-xl uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">موافقة</button>
-                    <button onClick={() => handleAction(t, 'failed')} className="flex-1 bg-red-600/10 text-red-500 border border-red-500/20 font-black py-3.5 rounded-xl uppercase text-[10px] active:scale-95">رفض</button>
+               {!historyMode && (
+                 <div className="flex gap-2">
+                    <button onClick={() => handleAction(t, 'completed')} className="flex-1 bg-white text-black font-black py-3 rounded-xl uppercase text-[10px] shadow-lg active:scale-95 transition-all">موافقة</button>
+                    <button onClick={() => handleAction(t, 'failed')} className="flex-1 bg-red-600/10 text-red-500 border border-red-500/20 font-black py-3 rounded-xl uppercase text-[10px] active:scale-95 transition-all">رفض</button>
                  </div>
                )}
             </div>
           ))}
-        </div>
-      )}
+          {filteredTxs.length === 0 && (tab !== 'users') && (
+            <div className="text-center py-20 text-slate-700 text-[10px] font-black uppercase italic tracking-widest">لا يوجد معاملات لعرضها</div>
+          )}
 
-      {tab === 'users' && (
-        <div className="space-y-3">
-           {users.map(u => (
-              <div key={u.id} className="bg-[#0b0f1a] border border-white/10 p-4 rounded-2xl flex justify-between items-center flex-row-reverse shadow-lg hover:border-blue-500/50 transition-all">
-                <div className="text-right flex items-center gap-3 flex-row-reverse">
-                   <div className="w-10 h-10 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center"><img src={`https://api.dicebear.com/7.x/bottts/svg?seed=${u.id}`} className="w-8 h-8" alt="Avatar" /></div>
-                   <div className="space-y-0.5">
-                      <h4 className="font-black text-white italic text-sm leading-none">{u.first_name} {u.last_name}</h4>
-                      <p className="text-[8px] text-slate-600 font-mono leading-none">{u.email}</p>
-                   </div>
-                </div>
-                <div className="text-left font-black italic text-blue-500 text-lg leading-none">{u.balance.toFixed(2)}</div>
+          {tab === 'users' && users.map(u => (
+            <div key={u.id} className="bg-[#0b0f1a] border border-white/10 p-4 rounded-2xl flex justify-between items-center flex-row-reverse shadow-lg">
+              <div className="text-right flex items-center gap-3 flex-row-reverse">
+                 <div className="w-10 h-10 bg-blue-600/10 rounded-lg flex items-center justify-center border border-blue-500/20">
+                    <UserIcon size={20} className="text-blue-500" />
+                 </div>
+                 <div>
+                    <h4 className="font-black text-white italic text-sm">{u.first_name}</h4>
+                    <p className="text-[8px] text-slate-600 font-mono">{u.email || u.id.substring(0, 15)}</p>
+                 </div>
               </div>
-            ))}
-        </div>
-      )}
+              <div className="text-left font-black italic text-blue-500 text-lg">{u.balance.toFixed(2)}</div>
+            </div>
+          ))}
+      </div>
     </div>
   );
 };
@@ -751,6 +753,9 @@ const AdminView = ({ t, showToast }: any) => {
 const RechargeModal = ({ t, onClose, onDeposit, showToast, userId }: any) => {
   const [amount, setAmount] = useState('');
   const [image, setImage] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+
   const handleFileUpload = (e: any) => {
     const file = e.target.files[0];
     if (file) {
@@ -759,44 +764,92 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId }: any) => {
       reader.readAsDataURL(file);
     }
   };
+
   const submit = async () => {
-    if (!amount || !image) return showToast("يرجى إكمال البيانات المطلوبة", "error");
-    await supabase.from('transactions').insert({ user_id: userId, type: 'deposit', amount: Number(amount), status: 'pending', proof_url: image });
-    showToast(t('verificationPending'), 'success'); onDeposit(); onClose();
+    if (!amount || !image) return showToast("أكمل البيانات", "error");
+    
+    setIsUploading(true);
+    let currentProgress = 0;
+    const interval = setInterval(() => {
+      currentProgress += 5;
+      setProgress(currentProgress);
+      if (currentProgress >= 100) clearInterval(interval);
+    }, 250); // Takes ~5 seconds
+
+    await new Promise(r => setTimeout(r, 5000));
+    
+    try {
+      await supabase.from('transactions').insert({ 
+        user_id: userId, 
+        type: 'deposit', 
+        amount: Number(amount), 
+        status: 'pending', 
+        proof_url: image 
+      });
+      showToast(t('verificationPending'), 'success');
+      onDeposit();
+      onClose();
+    } catch (e) {
+      showToast("خطأ في الاتصال", "error");
+    } finally {
+      setIsUploading(false);
+    }
   };
+
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl overflow-y-auto animate-in fade-in">
-      <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-sm rounded-3xl p-6 space-y-5 shadow-2xl animate-in zoom-in-95">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in">
+      <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-sm rounded-3xl p-6 space-y-5 animate-in zoom-in-95 shadow-2xl overflow-hidden relative">
+        {isUploading && (
+          <div className="absolute inset-0 z-50 bg-[#0b0f1a]/95 flex flex-col items-center justify-center p-8 text-center space-y-6 animate-in fade-in">
+             <div className="w-20 h-20 bg-blue-600/10 rounded-full flex items-center justify-center relative">
+                <div className="absolute inset-0 border-2 border-blue-500/20 rounded-full"></div>
+                <div className="absolute inset-0 border-t-2 border-blue-500 rounded-full animate-spin"></div>
+                <UploadCloud className="text-blue-500 animate-bounce" size={32} />
+             </div>
+             <div className="space-y-1">
+                <p className="text-white font-black uppercase text-sm italic tracking-widest">Securing Protocol Transaction</p>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Encrypting Proof {progress}%</p>
+             </div>
+             <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-600 transition-all duration-300" style={{width: `${progress}%`}}></div>
+             </div>
+          </div>
+        )}
+
         <div className="flex justify-between items-center bg-blue-600 p-4 rounded-xl shadow-lg">
-          <h3 className="font-black text-white text-sm italic uppercase tracking-widest">إيداع أصول مشفرة</h3>
-          <button onClick={onClose} className="text-white p-1 hover:bg-white/10 rounded-lg"><X size={20} /></button>
+          <h3 className="font-black text-white text-sm uppercase tracking-tighter italic">إيداع أصول بروتوكول</h3>
+          <button onClick={onClose} className="text-white hover:bg-white/10 p-1 rounded-lg transition-colors"><X size={20} /></button>
         </div>
+        
         <div className="bg-blue-600/5 border border-blue-500/10 p-4 rounded-xl space-y-3 text-right">
            <p className="text-[9px] font-black text-blue-500 uppercase italic">عنوان المحفظة (BEP20)</p>
-           <div className="bg-black/40 p-3 rounded-lg flex items-center gap-3 border border-white/5">
-              <button onClick={() => {navigator.clipboard.writeText(DEPOSIT_ADDRESS); showToast('تم نسخ العنوان', 'success')}} className="p-2 bg-blue-600 text-white rounded-lg active:scale-90"><Copy size={16}/></button>
-              <span className="text-[9px] font-mono text-slate-500 break-all flex-1">{DEPOSIT_ADDRESS}</span>
+           <div className="bg-black/40 p-3 rounded-lg flex items-center gap-3 border border-white/5 shadow-inner">
+              <button onClick={() => {navigator.clipboard.writeText(DEPOSIT_ADDRESS); showToast('تم النسخ', 'success')}} className="p-2 bg-blue-600 text-white rounded-lg active:scale-90 transition-all shadow-lg"><Copy size={16}/></button>
+              <span className="text-[9px] font-mono text-slate-500 break-all flex-1 text-center">{DEPOSIT_ADDRESS}</span>
            </div>
         </div>
+
         <div className="space-y-2 text-right">
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">المبلغ المراد شحنه</p>
-          <input type="number" placeholder="0.00 USDT" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black italic text-center text-3xl outline-none focus:border-blue-500/50" />
+          <input type="number" placeholder="USDT" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center text-3xl outline-none focus:border-blue-500/40 transition-all shadow-inner" />
         </div>
+
         <div className="space-y-3 text-right">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">إثبات التحويل (لقطة شاشة)</p>
-          <label className="block border-2 border-dashed border-white/10 rounded-2xl p-6 text-center bg-white/5 cursor-pointer hover:border-blue-500/50 transition-all">
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">إثبات التحويل</p>
+          <label className="block border-2 border-dashed border-white/10 rounded-2xl p-6 text-center bg-white/5 cursor-pointer hover:border-blue-500/20 transition-all shadow-inner">
              <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
              {image ? (
-               <img src={image} className="w-24 h-24 mx-auto rounded-xl object-cover border-2 border-blue-500 shadow-xl" alt="Proof" />
+               <img src={image} className="w-24 h-24 mx-auto rounded-xl object-cover border-2 border-blue-500 shadow-xl" />
              ) : (
-               <div className="text-blue-500/50 space-y-2">
-                 <UploadCloud size={32} className="mx-auto" />
-                 <p className="text-[10px] uppercase font-bold tracking-widest">رفع لقطة الشاشة</p>
+               <div className="space-y-2 opacity-50">
+                 <UploadCloud size={32} className="mx-auto text-blue-500" />
+                 <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">رفع لقطة الشاشة</p>
                </div>
              )}
           </label>
         </div>
-        <button onClick={submit} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase text-xs active:scale-95 shadow-xl hover:bg-slate-50">تأكيد عملية الإيداع</button>
+
+        <button onClick={submit} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase text-xs active:scale-95 transition-all shadow-xl hover:bg-slate-50">تأكيد عملية الإيداع</button>
       </div>
     </div>
   );
@@ -809,9 +862,9 @@ const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast
   const submit = async () => {
     if (isProcessing) return;
     const amt = Number(amount);
-    if (amt < MIN_WITHDRAWAL) return showToast(`الحد الأدنى للسحب ${MIN_WITHDRAWAL} عملات`, 'error');
-    if (amt > max) return showToast("رصيد السحب المتاح غير كافٍ", "error");
-    if (!address.trim()) return showToast("يرجى إدخال عنوان المحفظة", "error");
+    if (amt < MIN_WITHDRAWAL) return showToast(`الحد الأدنى ${MIN_WITHDRAWAL}`, 'error');
+    if (amt > max) return showToast("رصيد غير كافٍ", "error");
+    if (!address.trim()) return showToast("أدخل عنوان المحفظة", "error");
     
     try {
       await supabase.from('transactions').insert({ 
@@ -821,38 +874,36 @@ const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast
         status: 'pending', 
         details: `Addr: ${address}` 
       });
-      // تحديث الرصيد بحذر
       await supabase.from('profiles').update({ 
         balance: balance - amt, 
         withdrawable_balance: max - amt 
-      }).eq('id', userId).gte('withdrawable_balance', amt);
-
-      onWithdraw(); onClose(); showToast("تم إرسال طلب السحب بنجاح", 'success');
+      }).eq('id', userId);
+      onWithdraw(); onClose(); showToast("تم طلب السحب بنجاح", 'success');
     } catch (e) {
-      showToast("خطأ في معالجة الطلب", "error");
+      showToast("خطأ معالجة", "error");
     }
   };
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in">
-      <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-sm rounded-3xl p-6 space-y-6 shadow-2xl animate-in zoom-in-95">
-        <div className="flex justify-between items-center bg-blue-700 p-4 rounded-xl shadow-lg">
-          <h3 className="font-black text-white text-sm italic uppercase tracking-widest">تسييل الأصول</h3>
-          <button onClick={onClose} className="text-white p-1 hover:bg-white/10 rounded-lg"><X size={20} /></button>
+      <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-sm rounded-3xl p-6 space-y-6 animate-in zoom-in-95 shadow-2xl">
+        <div className="flex justify-between items-center bg-red-600 p-4 rounded-xl shadow-lg">
+          <h3 className="font-black text-white text-sm uppercase italic tracking-tighter">تسييل الأصول الرقمية</h3>
+          <button onClick={onClose} className="text-white"><X size={20} /></button>
         </div>
-        <div className="bg-blue-600/5 p-5 rounded-xl flex justify-between items-center flex-row-reverse border border-white/5">
+        <div className="bg-red-600/5 p-4 rounded-xl flex justify-between items-center flex-row-reverse border border-white/5 shadow-inner">
            <span className="text-[9px] font-black text-slate-500 uppercase">متاح للسحب</span>
-           <span className="text-2xl font-black text-blue-500 italic">{max.toFixed(2)} USDT</span>
+           <span className="text-xl font-black text-red-500 italic">{max.toFixed(2)} USDT</span>
         </div>
         <div className="space-y-2 text-right">
-           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">عنوان المحفظة المستلمة (BEP20)</p>
-           <input value={address} onChange={e => setAddress(e.target.value)} placeholder="0x..." className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-mono text-xs outline-none focus:border-blue-500/50" />
+           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">عنوان المحفظة (BEP20)</p>
+           <input value={address} onChange={e => setAddress(e.target.value)} placeholder="0x... (BEP20)" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-mono text-xs outline-none focus:border-red-500/40 transition-all shadow-inner" />
         </div>
         <div className="space-y-2 text-right">
-           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">المبلغ (الحد الأدنى 8)</p>
-           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="8+" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black italic text-center text-3xl outline-none focus:border-blue-500/50" />
+           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">المبلغ المطلوب</p>
+           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="المبلغ (8+)" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center text-3xl outline-none focus:border-red-500/40 transition-all shadow-inner" />
         </div>
-        <button onClick={submit} disabled={isProcessing} className="w-full bg-blue-600 text-white font-black py-4 rounded-xl uppercase text-xs active:scale-95 shadow-xl disabled:opacity-50">تأكيد طلب السحب</button>
+        <button onClick={submit} disabled={isProcessing} className="w-full bg-red-600 text-white font-black py-4 rounded-xl uppercase text-xs active:scale-95 disabled:opacity-50 transition-all shadow-xl">تأكيد طلب التسييل</button>
       </div>
     </div>
   );
@@ -860,13 +911,13 @@ const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast
 
 const InfoModal = ({ onClose }: any) => (
   <div className="fixed inset-0 z-[250] flex items-center justify-center p-6 bg-[#020617]/95 backdrop-blur-xl animate-in fade-in">
-    <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-xs rounded-3xl p-8 text-right space-y-6 shadow-2xl animate-in zoom-in-95">
-      <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-500 mx-auto border border-blue-500/20"><ShieldCheck size={32}/></div>
-      <h3 className="font-black text-white text-xl uppercase italic text-center leading-none tracking-tighter">بروتوكول الأمان V-2</h3>
-      <p className="text-[11px] leading-relaxed text-slate-400 font-medium italic text-center opacity-90">
-        يعمل MINEPRO كجسر تقني متطور لتسييل الأصول الرقمية. نظامنا محمي ضد هجمات التكرار (Race Attacks) ويضمن دقة العمليات المالية بنسبة 100% عبر عقود ذكية مشفرة.
+    <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-xs rounded-3xl p-8 text-right space-y-6 animate-in zoom-in-95 shadow-2xl">
+      <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-500 mx-auto border border-blue-500/20 shadow-lg"><ShieldCheck size={32}/></div>
+      <h3 className="font-black text-white text-xl uppercase italic text-center tracking-tighter">بروتوكول الأمان V-2</h3>
+      <p className="text-[11px] leading-relaxed text-slate-400 font-medium italic text-center">
+        نظام MINEPRO مؤمن بالكامل عبر بروتوكولات التشفير المتعددة. يتم تسييل الأصول عبر شبكة عالمية موزعة لضمان عوائد مستقرة بأقصى درجات الخصوصية والأمان.
       </p>
-      <button onClick={onClose} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase tracking-widest text-[10px] shadow-2xl active:scale-95">فهمت، استمرار</button>
+      <button onClick={onClose} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase text-[10px] active:scale-95 transition-all shadow-xl">فهمت، استمرار</button>
     </div>
   </div>
 );
@@ -877,6 +928,7 @@ const SupportChatModal = ({ userId, onClose }: any) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const fetchMessages = useCallback(async () => {
+    if (!userId) return;
     const { data } = await supabase.from('support_messages').select('*').or(`sender_id.eq.${userId},receiver_id.eq.${userId}`).order('created_at', { ascending: true });
     if (data) setMessages(data);
   }, [userId]);
@@ -890,7 +942,7 @@ const SupportChatModal = ({ userId, onClose }: any) => {
   useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight); }, [messages]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !userId) return;
     const msg = newMessage;
     setNewMessage('');
     await supabase.from('support_messages').insert({ sender_id: userId, receiver_id: 'ADMIN', message: msg });
@@ -899,8 +951,8 @@ const SupportChatModal = ({ userId, onClose }: any) => {
   return (
     <div className="fixed inset-0 z-[200] bg-[#020617]/98 backdrop-blur-xl flex flex-col animate-in fade-in">
       <div className="p-5 border-b border-white/5 flex justify-between items-center bg-[#0b0f1a] shadow-xl">
-        <button onClick={onClose} className="p-3 bg-white/5 rounded-xl text-slate-400"><X size={20}/></button>
-        <h3 className="font-black text-white italic text-lg uppercase leading-none">مركز الدعم الآمن</h3>
+        <button onClick={onClose} className="p-3 bg-white/5 rounded-xl text-slate-400 active:scale-90 transition-all"><X size={20}/></button>
+        <h3 className="font-black text-white italic text-lg uppercase tracking-tighter">الدردشة الأمنة للبروتوكول</h3>
       </div>
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
         {messages.map(m => (
@@ -911,9 +963,9 @@ const SupportChatModal = ({ userId, onClose }: any) => {
           </div>
         ))}
       </div>
-      <div className="p-6 bg-[#0b0f1a]/80 border-t border-white/5 flex gap-3">
-        <button onClick={sendMessage} className="p-4 bg-blue-600 text-white rounded-xl active:scale-90"><Send size={20}/></button>
-        <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyPress={e => e.key === 'Enter' && sendMessage()} placeholder="كيف يمكننا مساعدتك؟" className="flex-1 bg-white/5 border border-white/10 rounded-xl px-5 text-sm text-white outline-none" />
+      <div className="p-6 bg-[#0b0f1a]/80 border-t border-white/5 flex gap-3 shadow-2xl">
+        <button onClick={sendMessage} className="p-4 bg-blue-600 text-white rounded-xl active:scale-90 transition-all shadow-lg"><Send size={20}/></button>
+        <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyPress={e => e.key === 'Enter' && sendMessage()} placeholder="اكتب رسالتك لمدير البروتوكول..." className="flex-1 bg-white/5 border border-white/10 rounded-xl px-5 text-sm text-white outline-none focus:border-blue-500/40 transition-all shadow-inner" />
       </div>
     </div>
   );
