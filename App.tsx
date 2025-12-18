@@ -125,9 +125,13 @@ const App: React.FC = () => {
     if (session?.user) fetchAllUserData(session.user.id, session.user.email || '', true);
   };
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+  const showToast = (message: any, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now();
-    setToasts(prev => [...prev, { message, type, id }]);
+    // تحويل الكائن إلى نص لمنع ظهور [object Object]
+    const finalMessage = typeof message === 'object' ? (message?.message || JSON.stringify(message)) : String(message);
+    
+    setToasts(prev => [...prev, { message: finalMessage, type, id }]);
+    // تصحيح الخطأ: استخدام setToasts بدلاً من toasts مباشرة
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   };
 
