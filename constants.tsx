@@ -9,37 +9,44 @@ export const REFERRAL_PERCENT = 0.10;
 
 const generateMachines = (): Machine[] => {
   const machines: Machine[] = [];
-  const prices: number[] = [];
-
-  for (let i = 10; i <= 100; i += 10) prices.push(i);
-  for (let i = 125; i <= 200; i += 25) prices.push(i);
-  for (let i = 250; i <= 500; i += 50) prices.push(i);
-  for (let i = 600; i <= 1000; i += 100) prices.push(i);
-  for (let i = 2000; i <= 10000; i += 1000) prices.push(i);
-  for (let i = 20000; i <= 100000; i += 10000) prices.push(i);
-  for (let i = 200000; i <= 1000000; i += 100000) prices.push(i);
+  const prices: number[] = [10, 20, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000];
 
   prices.forEach((price, index) => {
-    const dailyRate = 0.10 + (index * 0.005);
+    // نسبة الربح تزداد بشكل مغري مع زيادة السعر
+    const dailyRate = 0.10 + (index * 0.008); 
     const dailyProfit = Number((price * dailyRate).toFixed(2));
-    const totalTargetReturn = price * 2;
-    const duration = Math.ceil(totalTargetReturn / dailyProfit);
+    const duration = 20; // دورة عمل ثابتة ومغرية (200% ربح في 20 يوم)
 
     let name = "";
-    if (price < 100) name = `V1-STARTER UNIT`;
-    else if (price < 1000) name = `ALPHA PRO MINER`;
-    else if (price < 10000) name = `TITAN RACK V4`;
-    else if (price < 100000) name = `GLOBAL MAINFRAME`;
-    else if (price < 500000) name = `QUANTUM SOVEREIGN`;
-    else name = `GALACTIC OMNI-NODE`;
+    let desc = "";
+    if (price <= 50) {
+      name = `CORE-NODE V1`;
+      desc = "مثالية للمبتدئين لبدء رحلة التعدين الرقمي";
+    } else if (price <= 500) {
+      name = `ALPHA-STREAM X`;
+      desc = "قوة معالجة مضاعفة مع استقرار عالي في الأرباح";
+    } else if (price <= 5000) {
+      name = `TITAN-RACK PRO`;
+      desc = "خوادم احترافية مخصصة لكبار المستثمرين";
+    } else if (price <= 50000) {
+      name = `QUANTUM OVERLORD`;
+      desc = "تقنية الكوانتوم لتوليد أقصى عائد ممكن يومياً";
+    } else if (price <= 250000) {
+      name = `NEBULA SUPERIOR`;
+      desc = "تحكم كامل في شبكة التعدين العالمية بعوائد ضخمة";
+    } else {
+      name = `SUPREME OMNI-GOD`;
+      desc = "قمة الهرم الاستثماري - سيطرة كاملة على البروتوكول";
+    }
 
     machines.push({
       id: index + 1,
       name: name,
       price: price,
       dailyProfit: dailyProfit,
-      duration: duration
-    });
+      duration: duration,
+      description: desc // أضفنا الوصف للإغراء
+    } as any);
   });
 
   return machines;
@@ -52,27 +59,20 @@ export const TRANSLATIONS: Translations = {
   machines: { en: "Machines", ar: "الماكينات" },
   tasks: { en: "Tasks", ar: "المهام" },
   team: { en: "Team", ar: "الفريق" },
-  profile: { en: "Profile", ar: "الملف الشخصي" },
-  adminTool: { en: "Admin Panel", ar: "أداة المسؤول" },
-  balanceTitle: { en: "Total Available Balance", ar: "الرصيد الكلي المتاح" },
-  recharge: { en: "Deposit Balance", ar: "إيداع الرصيد" },
-  withdraw: { en: "Withdraw Profit", ar: "سحب الأرباح" },
-  history: { en: "Transaction History", ar: "سجل العمليات" },
-  amountToDeposit: { en: "Amount to Deposit", ar: "المبلغ المراد إيداعه" },
-  confirmDeposit: { en: "Verify Deposit", ar: "تأكيد الإيداع" },
-  buyNow: { en: "Activate Miner", ar: "تفعيل الماكينة" },
+  profile: { en: "Profile", ar: "الملف" },
+  adminTool: { en: "Admin", ar: "المسؤول" },
+  balanceTitle: { en: "Available Balance", ar: "الرصيد المتاح" },
+  recharge: { en: "Recharge", ar: "إيداع" },
+  withdraw: { en: "Withdraw", ar: "سحب" },
+  history: { en: "History", ar: "السجل" },
+  buyNow: { en: "Buy Now", ar: "شراء الآن" },
   owned: { en: "Active", ar: "نشط" },
-  completeTask: { en: "Harvest Profit", ar: "حصاد الأرباح" },
-  transactionCompleted: { en: "Success", ar: "تم بنجاح" },
-  verificationPending: { en: "Verification in progress...", ar: "جاري التحقق من المعاملة..." },
-  minWithdrawalError: { en: "Minimum withdrawal is 8 USDT.", ar: "الحد الأدنى للسحب هو 8 عملات." },
-  securityTitle: { en: "Protocol & Legal Safety", ar: "البروتوكول والأمان القانوني" },
-  securityText: { 
-    en: "Our platform acts as a secure intermediary for asset purification.",
-    ar: "تعمل منصتنا كوسيط آمن لتنقية الأصول. معلوماتك مشفرة بنسبة 100٪ وغير مرئية لأي جهاز." 
-  },
-  clickToUpload: { en: "Upload Transfer Proof", ar: "رفع إثبات التحويل" },
-  supportChat: { en: "Support Chat", ar: "الدردشة مع الدعم" },
-  send: { en: "Send", ar: "إرسال" },
-  typeMessage: { en: "Type your message...", ar: "اكتب رسالتك هنا..." }
+  completeTask: { en: "Claim Profit", ar: "استلام الربح" },
+  supportChat: { en: "Support", ar: "الدعم الفني" },
+  typeMessage: { en: "Type here...", ar: "اكتب رسالتك..." },
+  confirmDeposit: { en: "Confirm", ar: "تأكيد" },
+  clickToUpload: { en: "Upload Proof", ar: "رفع الإثبات" },
+  minWithdrawalError: { en: "Min 8 USDT", ar: "أقل سحب 8 عملات" },
+  verificationPending: { en: "Pending...", ar: "قيد المراجعة..." },
+  transactionCompleted: { en: "Success", ar: "تم بنجاح" }
 };
