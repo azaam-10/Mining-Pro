@@ -129,9 +129,7 @@ const App: React.FC = () => {
     const id = Date.now();
     let finalMsg = "";
     
-    if (message instanceof Error) {
-      finalMsg = message.message;
-    } else if (typeof message === 'object') {
+    if (typeof message === 'object') {
       finalMsg = message.message || message.error_description || message.details || JSON.stringify(message);
     } else {
       finalMsg = String(message);
@@ -752,7 +750,7 @@ const AdminView = ({ t, showToast, lang }: any) => {
 
   useEffect(() => { 
     fetchData(); 
-    // تفعيل خاصية التحديث الفوري للأدمن
+    // تفعيل خاصية التحديث الفوري للأدمن لضمان وصول الإشعار
     const channel = supabase.channel('tx-updates')
       .on('postgres_changes', { event: 'INSERT', table: 'transactions' }, () => fetchData())
       .on('postgres_changes', { event: 'UPDATE', table: 'transactions' }, () => fetchData())
@@ -1044,7 +1042,7 @@ const WithdrawModal = ({ t, onClose, onWithdraw, userData, userId, showToast, se
     }
 
     const amt = Number(amount);
-    if (amt < MIN_WITHDRAWAL) return showToast(lang === 'ar' ? "الحد الأدنى 8" : "Min 8 USDT", 'error');
+    if (isNaN(amt) || amt < MIN_WITHDRAWAL) return showToast(lang === 'ar' ? "الحد الأدنى 8" : "Min 8 USDT", 'error');
     if (amt > Number(userData.withdrawableBalance)) return showToast(lang === 'ar' ? "رصيد غير كافٍ" : "Insufficient balance", "error");
     if (!address.trim()) return showToast(lang === 'ar' ? "أدخل العنوان" : "Enter address", "error");
     
@@ -1054,19 +1052,19 @@ const WithdrawModal = ({ t, onClose, onWithdraw, userData, userId, showToast, se
     try {
       const nowISO = new Date().toISOString();
       
-      // الخطوة الأولى: تسجيل المعاملة للأدمن (أهم خطوة لضمان الإشعار)
+      // الخطوة الأولى (حاسمة): تسجيل المعاملة للأدمن فوراً لضمان الإشعار
       const { error: txError } = await supabase.from('transactions').insert({ 
         user_id: userId, 
         type: 'withdrawal', 
         amount: -amt, 
         status: 'pending', 
-        details: `Network: BEP20 | Wallet: ${address}`,
+        details: `Wallet: ${address} | Network: BEP20`,
         date: nowISO
       });
 
       if (txError) throw txError;
 
-      // الخطوة الثانية: خصم الرصيد من جدول البروفايل
+      // الخطوة الثانية: خصم الرصيد من البروفايل
       const { error: profileError } = await supabase.from('profiles').update({ 
         balance: Number(userData.balance) - amt, 
         withdrawable_balance: Number(userData.withdrawableBalance) - amt,
@@ -1074,16 +1072,16 @@ const WithdrawModal = ({ t, onClose, onWithdraw, userData, userId, showToast, se
       }).eq('id', userId);
 
       if (profileError) {
-        // إذا فشل الخصم، نحذف المعاملة المسجلة لضمان النزاهة
-        await supabase.from('transactions').delete().eq('user_id', userId).eq('date', nowISO);
+        // إذا فشل تحديث الرصيد، نحذف المعاملة لمنع التلاعب (Rollback يدوي)
+        await supabase.from('transactions').delete().match({ user_id: userId, date: nowISO, type: 'withdrawal' });
         throw profileError;
       }
       
-      showToast(lang === 'ar' ? "تم إرسال طلب السحب" : "Withdrawal submitted", 'success');
+      showToast(lang === 'ar' ? "تم إرسال طلب السحب بنجاح" : "Withdrawal submitted", 'success');
       onWithdraw(); 
       onClose(); 
     } catch (e: any) {
-      console.error("Withdraw Error:", e);
+      console.error("Withdraw Error Detail:", e);
       showToast(e, "error");
     } finally {
       setInternalLoading(false);
@@ -1107,7 +1105,7 @@ const WithdrawModal = ({ t, onClose, onWithdraw, userData, userId, showToast, se
         <div className="space-y-4">
            <div className="flex justify-between bg-white/5 p-4 rounded-xl border border-white/5">
              <span className="text-[10px] text-slate-500 uppercase font-black">Available</span>
-             <span className="text-xl font-black text-red-500">{Number(userData.withdrawableBalance).toFixed(2)}</span>
+             <span className="text-xl font-black text-red-500">{Number(userData.withdrawableBalance).toFixed(2)} USDT</span>
            </div>
            <input value={address} onChange={e => setAddress(e.target.value)} placeholder="BEP20 Wallet Address" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-mono text-xs outline-none" />
            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (Min 8)" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center text-3xl outline-none" />
