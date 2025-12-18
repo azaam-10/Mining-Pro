@@ -37,6 +37,7 @@ const App: React.FC = () => {
   const [userData, setUserData] = useState<UserState | null>(null);
   const [fetchError, setFetchError] = useState(false);
 
+  // تنسيق البيانات مع استبعاد الحقول التي قد تسبب أخطاء في السكيما
   const formatUserData = (profile: any, machines: any[], txs: any[], email: string): UserState => ({
     ...profile,
     email: email || profile.email || '',
@@ -46,7 +47,7 @@ const App: React.FC = () => {
     referralEarnings: profile.referral_earnings || 0,
     ownedMachines: (machines || []).filter(m => m.remaining_days > 0),
     transactions: txs || [],
-    lastWithdrawDate: profile.last_withdraw_date || null
+    lastWithdrawDate: null // تم الإلغاء للاعتماد على سجل المعاملات
   });
 
   const fetchAllUserData = useCallback(async (userId: string, userEmail: string, isManual: boolean = false) => {
@@ -1034,17 +1035,18 @@ const WithdrawModal = ({ t, onClose, onWithdraw, userData, userId, showToast, se
   const submit = async () => {
     if (internalLoading || isProcessing) return;
     
-    // 1. فحص سحب واحد يومياً
-    if (userData.lastWithdrawDate) {
-      const lastDate = new Date(userData.lastWithdrawDate).toDateString();
+    // فحص سحب واحد يومياً عبر سجل المعاملات بدلاً من عامود البروفايل
+    const lastWithdrawal = userData.transactions.find(tx => tx.type === 'withdrawal' && (tx.status === 'pending' || tx.status === 'completed'));
+    if (lastWithdrawal) {
+      const lastDate = new Date(lastWithdrawal.date).toDateString();
       const today = new Date().toDateString();
-      if (lastDate === today) return showToast(lang === 'ar' ? "سحب واحد يومياً" : "One withdrawal per day", "error");
+      if (lastDate === today) return showToast(lang === 'ar' ? "عذراً، يسمح بسحب واحد فقط خلال 24 ساعة" : "Only one withdrawal per 24h", "error");
     }
 
     const amt = Number(amount);
-    if (isNaN(amt) || amt < MIN_WITHDRAWAL) return showToast(lang === 'ar' ? "الحد الأدنى 8" : "Min 8 USDT", 'error');
-    if (amt > Number(userData.withdrawableBalance)) return showToast(lang === 'ar' ? "رصيد غير كافٍ" : "Insufficient balance", "error");
-    if (!address.trim()) return showToast(lang === 'ar' ? "أدخل العنوان" : "Enter address", "error");
+    if (isNaN(amt) || amt < MIN_WITHDRAWAL) return showToast(lang === 'ar' ? "الحد الأدنى للسحب هو 8 عملات" : "Min 8 USDT", 'error');
+    if (amt > Number(userData.withdrawableBalance)) return showToast(lang === 'ar' ? "رصيدك القابل للسحب غير كافٍ" : "Insufficient balance", "error");
+    if (!address.trim()) return showToast(lang === 'ar' ? "يرجى إدخال عنوان المحفظة" : "Enter address", "error");
     
     setInternalLoading(true);
     setIsProcessing(true);
@@ -1052,27 +1054,26 @@ const WithdrawModal = ({ t, onClose, onWithdraw, userData, userId, showToast, se
     try {
       const nowISO = new Date().toISOString();
       
-      // الخطوة الأولى (حاسمة): تسجيل المعاملة للأدمن فوراً لضمان الإشعار
+      // الخطوة الأولى: تسجيل المعاملة للأدمن (هذا سيظهر فوراً للأدمن)
       const { error: txError } = await supabase.from('transactions').insert({ 
         user_id: userId, 
         type: 'withdrawal', 
         amount: -amt, 
         status: 'pending', 
-        details: `Wallet: ${address} | Network: BEP20`,
+        details: `Wallet: ${address} | BEP20`,
         date: nowISO
       });
 
       if (txError) throw txError;
 
-      // الخطوة الثانية: خصم الرصيد من البروفايل
+      // الخطوة الثانية: خصم الرصيد من جدول البروفايل (تحديث الحقول المتأكدين من وجودها فقط)
       const { error: profileError } = await supabase.from('profiles').update({ 
         balance: Number(userData.balance) - amt, 
-        withdrawable_balance: Number(userData.withdrawableBalance) - amt,
-        last_withdraw_date: nowISO
+        withdrawable_balance: Number(userData.withdrawableBalance) - amt
       }).eq('id', userId);
 
       if (profileError) {
-        // إذا فشل تحديث الرصيد، نحذف المعاملة لمنع التلاعب (Rollback يدوي)
+        // إذا فشل تحديث الرصيد، نحذف المعاملة المسجلة لضمان النزاهة
         await supabase.from('transactions').delete().match({ user_id: userId, date: nowISO, type: 'withdrawal' });
         throw profileError;
       }
