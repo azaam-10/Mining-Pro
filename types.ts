@@ -28,11 +28,16 @@ export interface Transaction {
 }
 
 export interface UserState {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
   balance: number;
-  withdrawableBalance: number; // Only profits/earnings can be withdrawn
+  withdrawableBalance: number;
   totalRecharge: number;
   totalWithdraw: number;
   referralEarnings: number;
+  referral_code: string;
   ownedMachines: UserMachine[];
   transactions: Transaction[];
   lastWithdrawDate: string | null;
