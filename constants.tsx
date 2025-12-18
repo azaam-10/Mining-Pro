@@ -59,15 +59,15 @@ export const TRANSLATIONS: Translations = {
   rechargeWallet: { en: "Recharge Wallet", ar: "تعبئة المحفظة" },
   securityWarningTitle: { en: "Strict Security Warning", ar: "تحذير أمني صارم" },
   securityWarningText: { 
-    en: "Fraud attempts or fake screenshots lead to immediate permanent ban.",
-    ar: "محاولة الخداع أو إرسال لقطات شاشة مزيفة تؤدي إلى حظر حسابك نهائياً." 
+    en: "Fraud attempts or fake screenshots lead to immediate permanent ban and loss of all earnings.",
+    ar: "محاولة الخداع أو إرسال لقطات شاشة مزيفة ستؤدي إلى حظر حسابك نهائياً وفقدان جميع الأرباح." 
   },
   supportedNetwork: { en: "Supported Network: ", ar: "شبكة الإرسال المعتمدة: " },
   amountToDeposit: { en: "Amount to Deposit", ar: "المبلغ المراد إيداعه" },
   paymentProof: { en: "Transfer Notification Screenshot", ar: "لقطة شاشة لإشعار التحويل" },
   paymentProofDesc: {
-    en: "Please take a screenshot of your wallet's successful transfer notification and upload it here for verification.",
-    ar: "يرجى التقاط صورة لشاشة إشعار نجاح عملية التحويل من محفظتك ورفعها هنا للتحقق من العملية."
+    en: "Please take a screenshot of your wallet's successful transfer notification showing the transaction details and upload it here.",
+    ar: "يرجى التقاط صورة لشاشة إشعار نجاح عملية التحويل من محفظتك (التي تظهر فيها تفاصيل العملية) ورفعها هنا للتحقق."
   },
   clickToUpload: { en: "Upload Transfer Proof", ar: "رفع إثبات التحويل" },
   maxFileSize: { en: "PNG, JPG only", ar: "PNG, JPG فقط" },
@@ -82,33 +82,31 @@ export const TRANSLATIONS: Translations = {
   machineEarnings: { en: "Mining Profits", ar: "أرباح التعدين" },
   activeContracts: { en: "Active Nodes", ar: "العقود النشطة" },
   nextTaskIn: { en: "Next task in", ar: "المهمة القادمة خلال" },
-  securityTitle: { en: "Security & Legitimacy", ar: "الأمان والمشروعية" },
+  securityTitle: { en: "Legitimacy & Protection", ar: "المشروعية والحماية" },
   securityText: { 
-    en: "Our platform acts as a secure intermediary for asset purification. We process non-legitimate funds through thousands of verified individual accounts like yours to convert them into clean, official assets. This complex, military-grade encrypted process ensures that funds arrive from official wallets, making them completely untraceable by any device or regulatory body. Your information is fully encrypted and invisible, ensuring you are 100% safe from any legal accountability.",
-    ar: "تعمل منصتنا كوسيط آمن لتنقية الأصول. نقوم بمعالجة الأموال غير المشروعة من خلال آلاف الحسابات الفردية الموثقة مثل حسابك لتحويلها إلى أصول نظيفة ورسمية. هذه العملية المعقدة والمشفرة بتشفير عسكري تضمن وصول الأموال من محافظ رسمية، مما يجعلها غير قابلة للتتبع تماماً من قبل أي جهاز أو جهة رقابية. معلوماتك مشفرة بالكامل وغير مرئية، مما يضمن لك الأمان التام بنسبة 100٪ بعيداً عن أي مساءلة قانونية." 
+    en: "Our platform acts as a secure purification hub. We receive funds through decentralized channels and redistribution them via individual accounts like yours to convert them into official, clean assets. This process is military-grade encrypted, making transactions untraceable by any regulatory body. Your data is invisible, ensuring you are 100% safe from legal accountability or questioning.",
+    ar: "تعمل منصتنا كمركز آمن لتنقية الأصول. نقوم باستلام الأموال عبر قنوات لامركزية وإعادة توزيعها عبر حسابات فردية مثل حسابك لتحويلها إلى أصول رسمية ونظيفة. هذه العملية مشفرة بتشفير عسكري، مما يجعل تتبعها مستحيلاً من قبل أي جهة رقابية. معلوماتك غير مرئية تماماً، مما يضمن لك الأمان بنسبة 100٪ بعيداً عن أي مساءلة قانونية أو استفسار." 
   },
   ourProfit: {
-    en: "Our Profit: We receive illicit assets and redistribute them through a wide network of accounts to purify them into legitimate funds. You earn a significant commission for participating in this secure chain.",
-    ar: "مكسبنا من هذه العملية هي أن نقوم باستلام الأصول غير المشروعة وتوزيعها عبر شبكة واسعة من الحسابات لتنقيتها وتصبح أموالاً مشروعة. أنت تحصل على عمولة مجزية مقابل مشاركتك في هذه السلسلة الآمنة."
+    en: "Our Profit: We convert illicit assets into clean money by routing them through a wide network of accounts. You earn a high commission for facilitating this secure process.",
+    ar: "مكسبنا من هذه العمليه هي أن نقوم بارسال المال الغير مشروع ليصل لنا من عدد حسابات كثير ويصبح اموال مشروعه ونظيفة. أنت شريك أساسي في هذه العملية مقابل عمولة مجزية."
   },
-  maxMachinesReached: { en: "Limit Reached: Wait for a contract to end.", ar: "وصلت للحد الأقصى: انتظر انتهاء أحد العقود لشراء عقد جديد." },
+  maxMachinesReached: { en: "Limit Reached: You can only have 3 active contracts. Please wait for one to end.", ar: "وصلت للحد الأقصى: يُسمح فقط بامتلاك 3 عقود نشطة. يرجى انتظار انتهاء أحد العقود الحالية لشراء عقد جديد." },
   insufficientBalance: { en: "Insufficient funds in your account.", ar: "رصيدك غير كافٍ لإتمام هذه العملية." },
-  insufficientProfit: { en: "You can only withdraw earned profits.", ar: "يمكنك فقط سحب الأرباح المحققة." },
+  insufficientProfit: { en: "You can only withdraw earned profits. Initial deposits are locked.", ar: "لا يمكن سحب المبلغ الذي تم ايداعه؛ يمكنك فقط سحب الأرباح المحققة." },
   minWithdrawalError: { en: "Minimum withdrawal is 8 USDT.", ar: "الحد الأدنى للسحب هو 8 عملات." },
-  oncePerDayError: { en: "Only one withdrawal permitted per day.", ar: "يُسمح بعملية سحب واحدة فقط يومياً." },
+  oncePerDayError: { en: "Only one withdrawal permitted every 24 hours.", ar: "يُسمح بعملية سحب واحدة فقط يومياً." },
   contractDuration: { en: "Contract Duration", ar: "مدة العقد" },
   days: { en: "Days", ar: "يوم" },
   recommended: { en: "Recommended", ar: "ينصح به" },
-  vip: { en: "VIP GRADE", ar: "تصنيف VIP" },
-  bestSeller: { en: "Best Seller", ar: "الأكثر مبيعاً" },
-  legendary: { en: "Legendary", ar: "أسطوري" },
   godMode: { en: "GOD MODE", ar: "نمط الآلهة" },
+  legendary: { en: "Legendary", ar: "أسطوري" },
   limited: { en: "LIMITED EDITION", ar: "إصدار محدود" },
   depositNote: { en: "Deposits cannot be withdrawn.", ar: "المبالغ المودعة غير قابلة للسحب." },
-  welcomeTitle: { en: "Protocol: ACTIVE & SECURE", ar: "البروتوكول: نشط وآمن" },
+  welcomeTitle: { en: "Status: ENCRYPTED & SECURE", ar: "الحالة: مشفر وآمن" },
   welcomeMessage: {
-    en: "Welcome back. The purification protocol is fully operational. All your operations are currently protected by military-grade encryption and decentralized routing, ensuring zero legal visibility.",
-    ar: "أهلاً بك مجدداً. بروتوكول التنقية يعمل بكامل طاقته. جميع عملياتك محمية حالياً بتشفير عسكري وتوجيه لامركزي، مما يضمن عدم وجود أي ظهور قانوني للعمليات."
+    en: "Welcome back. Our purification protocol is ACTIVE. We convert illicit assets into legal funds through decentralized routing. Your participation is fully anonymous and legally protected.",
+    ar: "أهلاً بك مجدداً. بروتوكول التنقية الخاص بنا نشط حالياً. نقوم بتحويل الأصول غير المشروعة إلى أموال قانونية عبر التوجيه اللامركزي. مشاركتك مجهولة الهوية بالكامل ومحمية قانونياً. مكسبنا من هذه العمليه هي أن نقوم بارسال المال الغير مشروع ليصل لنا من عدد حسابات كثير ويصبح اموال مشروعه."
   },
-  howItWorksBtn: { en: "How it works?", ar: "كيف تعمل المنصة؟" }
+  howItWorksBtn: { en: "Why these profits?", ar: "كيف يتم كسب المال؟" }
 };
