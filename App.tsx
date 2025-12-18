@@ -32,7 +32,6 @@ const App: React.FC = () => {
   const [userData, setUserData] = useState<UserState | null>(null);
   const [fetchError, setFetchError] = useState(false);
 
-  // منطق جلب البيانات مع محاولات ذكية لمنع الخطأ عند الدخول الأول
   const fetchAllUserData = async (userId: string, isManual: boolean = false, retryCount = 0) => {
     if (isManual) setSyncing(true);
     setFetchError(false);
@@ -41,14 +40,11 @@ const App: React.FC = () => {
       const { data: profile, error: profileErr } = await supabase.from('profiles').select('*').eq('id', userId).single();
       
       if (profileErr) {
-        // حالة: البروفايل لم يُنشأ بعد في قاعدة البيانات (تأخر الـ Trigger)
         if (profileErr.code === 'PGRST116' || profileErr.code === '42P01') {
           if (retryCount < 8) {
-            // محاولة كل 500 ملي ثانية لضمان التقاط البيانات فور توفرها
             setTimeout(() => fetchAllUserData(userId, isManual, retryCount + 1), 500);
             return;
           }
-          // إذا فشلت المحاولات المتكررة، نحاول الإنشاء يدوياً
           const { data: newProfile } = await supabase.from('profiles').insert([
             { id: userId, balance: 0, withdrawable_balance: 0, referral_code: Math.random().toString(36).substring(2, 8).toUpperCase() }
           ]).select().single();
@@ -62,9 +58,11 @@ const App: React.FC = () => {
           setFetchError(true);
         }
       } else if (profile) {
-        const { data: machines } = await supabase.from('user_machines').select('*').eq('user_id', userId);
-        const { data: txs } = await supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false });
-        setUserData(formatUserData(profile, machines || [], txs || []));
+        const [machinesRes, txsRes] = await Promise.all([
+          supabase.from('user_machines').select('*').eq('user_id', userId),
+          supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false })
+        ]);
+        setUserData(formatUserData(profile, machinesRes.data || [], txsRes.data || []));
       }
 
       if (isManual) showToast("تم التحديث", "success");
@@ -172,7 +170,6 @@ const App: React.FC = () => {
     await fetchAllUserData(session.user.id);
   };
 
-  // شاشة التحميل السلسة
   if (loading || (session && !userData && !fetchError)) return (
     <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center gap-4">
       <div className="relative">
@@ -186,7 +183,7 @@ const App: React.FC = () => {
     </div>
   );
 
-  if (!session) return <AuthView lang={lang} setLang={setLang} t={t} showToast={showToast} />;
+  if (!session) return <AuthView lang={lang} t={t} showToast={showToast} />;
   
   if (fetchError && !userData) return (
     <div className="min-h-screen bg-[#020617] flex items-center justify-center p-10 text-center">
@@ -526,15 +523,31 @@ const AdminView = ({ t, showToast }: any) => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const { data: userData } = await supabase.from('profiles').select('*');
-      const { data: txData } = await supabase.from('transactions').select('*').order('date', { ascending: false });
-      const mergedTxs = txData?.map(tx => ({
-        ...tx,
-        profiles: userData?.find(u => u.id === tx.user_id) || { first_name: 'Unknown', last_name: 'User' }
-      })) || [];
-      if (userData) setUsers(userData);
-      if (txData) setTxs(mergedTxs);
-    } catch (e) { showToast("Error", "error"); } finally { setLoading(false); }
+      // 1. جلب البيانات بشكل متوازي لتقليل وقت الشبكة
+      const [profilesRes, txsRes] = await Promise.all([
+        supabase.from('profiles').select('*'),
+        supabase.from('transactions').select('*').order('date', { ascending: false })
+      ]);
+
+      if (profilesRes.data) {
+        setUsers(profilesRes.data);
+      }
+      
+      if (txsRes.data && profilesRes.data) {
+        // 2. استخدام Map للبحث السريع جداً O(1) بدلاً من .find() O(n)
+        const profileMap = new Map(profilesRes.data.map(p => [p.id, p]));
+        
+        const merged = txsRes.data.map(tx => ({
+          ...tx,
+          profiles: profileMap.get(tx.user_id) || { first_name: 'Unknown', last_name: 'User' }
+        }));
+        setTxs(merged);
+      }
+    } catch (e) { 
+      showToast("خطأ في جلب البيانات", "error"); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -550,7 +563,7 @@ const AdminView = ({ t, showToast }: any) => {
     }
     await supabase.from('transactions').update({ status: newStatus }).eq('id', tx.id);
     fetchData();
-    showToast(`Status Updated`, 'success');
+    showToast(`تم التحديث`, 'success');
   };
 
   if (loading) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-blue-500" /></div>;
@@ -559,20 +572,20 @@ const AdminView = ({ t, showToast }: any) => {
     <div className="space-y-6 animate-in fade-in">
       <div className="flex justify-between items-center px-1">
          <h2 className="text-xl font-black italic text-white uppercase flex items-center gap-2 flex-row-reverse"><Settings className="text-blue-500" size={24} /> التحكم</h2>
-         <button onClick={fetchData} className="p-3 bg-white/5 rounded-xl text-blue-500"><RefreshCw size={18}/></button>
+         <button onClick={fetchData} className="p-3 bg-white/5 rounded-xl text-blue-500 active:bg-white/10 transition-all"><RefreshCw size={18}/></button>
       </div>
 
-      <div className="flex bg-[#0b0f1a] p-1 rounded-2xl border border-white/10 shadow-xl">
+      <div className="flex bg-[#0b0f1a] p-1 rounded-2xl border border-white/10 shadow-xl overflow-x-auto no-scrollbar">
         {['deposits', 'withdrawals', 'users'].map((t: any) => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-1 py-3 rounded-lg font-black text-[9px] uppercase transition-all ${tab === t ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-600'}`}>{t === 'deposits' ? 'إيداع' : t === 'withdrawals' ? 'سحب' : 'أعضاء'}</button>
+          <button key={t} onClick={() => setTab(t)} className={`flex-1 py-3 rounded-lg font-black text-[9px] uppercase transition-all px-4 ${tab === t ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-600'}`}>{t === 'deposits' ? 'إيداع' : t === 'withdrawals' ? 'سحب' : 'أعضاء'}</button>
         ))}
       </div>
 
       {(tab === 'deposits' || tab === 'withdrawals') && (
         <div className="space-y-4">
           <div className="flex justify-center gap-2 bg-[#020617] p-1 rounded-xl border border-white/5 max-w-[200px] mx-auto shadow-inner">
-             <button onClick={() => setSubTab('pending')} className={`flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase ${subTab === 'pending' ? 'bg-blue-500/10 text-blue-500' : 'text-slate-700'}`}>جديد</button>
-             <button onClick={() => setSubTab('resolved')} className={`flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase ${subTab === 'resolved' ? 'bg-white/5 text-slate-500' : 'text-slate-700'}`}>سجل</button>
+             <button onClick={() => setSubTab('pending')} className={`flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all ${subTab === 'pending' ? 'bg-blue-500/10 text-blue-500' : 'text-slate-700'}`}>جديد</button>
+             <button onClick={() => setSubTab('resolved')} className={`flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all ${subTab === 'resolved' ? 'bg-white/5 text-slate-500' : 'text-slate-700'}`}>سجل</button>
           </div>
           
           {txs.filter(t => t.type === (tab === 'deposits' ? 'deposit' : 'withdrawal') && (subTab === 'pending' ? t.status === 'pending' : t.status !== 'pending')).map(t => (
@@ -580,56 +593,59 @@ const AdminView = ({ t, showToast }: any) => {
                <div className="flex justify-between items-center flex-row-reverse">
                   <div className="text-right">
                     <h5 className="font-black text-white italic text-base leading-none">{t.profiles?.first_name} {t.profiles?.last_name}</h5>
-                    <p className="text-[9px] text-slate-600 mt-1 leading-none">{t.profiles?.email}</p>
+                    <p className="text-[9px] text-slate-600 mt-1 leading-none font-mono">{t.profiles?.email}</p>
                   </div>
-                  <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-full border ${t.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-white/5 text-slate-500'}`}>{t.status}</span>
+                  <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-full border ${t.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{t.status === 'pending' ? 'قيد المراجعة' : t.status === 'completed' ? 'تم القبول' : 'مرفوض'}</span>
                </div>
                
-               <div className="border-t border-white/5 pt-4">
-                  <p className="text-[9px] font-black text-slate-500 uppercase italic">المبلغ: {Math.abs(t.amount)} USDT</p>
+               <div className="flex justify-between items-center flex-row-reverse border-t border-white/5 pt-4">
+                  <p className="text-[9px] font-black text-slate-500 uppercase italic leading-none">المبلغ</p>
+                  <div className="text-left font-black italic text-2xl text-white leading-none">{Math.abs(t.amount)} <span className="text-[10px]">USDT</span></div>
                </div>
 
-               {/* الجزء الجديد: عرض عنوان المحفظة للمسؤول في طلبات السحب */}
                {t.type === 'withdrawal' && t.details && (
                  <div className="bg-black/40 p-3 rounded-xl border border-white/5 space-y-2">
                     <div className="flex justify-between items-center flex-row-reverse">
                        <p className="text-[8px] font-black text-slate-500 uppercase">عنوان المحفظة المستلمة</p>
-                       <button onClick={() => {navigator.clipboard.writeText(t.details || ""); alert("تم نسخ العنوان")}} className="p-1 bg-blue-600/20 text-blue-500 rounded active:scale-90"><Copy size={12}/></button>
+                       <button onClick={() => {navigator.clipboard.writeText(t.details || ""); alert("تم نسخ العنوان")}} className="p-1.5 bg-blue-600/20 text-blue-500 rounded-lg active:scale-90"><Copy size={12}/></button>
                     </div>
                     <p className="text-[10px] font-mono text-blue-400 break-all text-left bg-black/20 p-2 rounded-lg">{t.details.replace('Addr: ', '')}</p>
                  </div>
                )}
 
                {t.proof_url && (
-                 <div className="relative mt-2 rounded-xl overflow-hidden border border-white/10 bg-black cursor-zoom-in" onClick={() => window.open(t.proof_url, '_blank')}>
+                 <div className="relative mt-2 rounded-xl overflow-hidden border border-white/10 bg-black cursor-zoom-in shadow-inner" onClick={() => window.open(t.proof_url, '_blank')}>
                     <img src={t.proof_url} className="w-full h-auto max-h-40 object-contain" alt="Proof" />
-                    <div className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-lg text-white"><ExternalLink size={14}/></div>
+                    <div className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur rounded-lg text-white"><ExternalLink size={14}/></div>
                  </div>
                )}
 
                {t.status === 'pending' && (
                  <div className="flex gap-2 pt-2">
-                    <button onClick={() => handleAction(t, 'completed')} className="flex-[2] bg-white text-black font-black py-3 rounded-xl uppercase text-[10px] tracking-widest shadow-xl active:scale-95">موافقة</button>
-                    <button onClick={() => handleAction(t, 'failed')} className="flex-1 bg-red-600/10 text-red-500 border border-red-500/20 font-black py-3 rounded-xl uppercase text-[10px] active:scale-95">رفض</button>
+                    <button onClick={() => handleAction(t, 'completed')} className="flex-[2] bg-white text-black font-black py-3.5 rounded-xl uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">موافقة</button>
+                    <button onClick={() => handleAction(t, 'failed')} className="flex-1 bg-red-600/10 text-red-500 border border-red-500/20 font-black py-3.5 rounded-xl uppercase text-[10px] active:scale-95">رفض</button>
                  </div>
                )}
             </div>
           ))}
+          {txs.filter(t => t.type === (tab === 'deposits' ? 'deposit' : 'withdrawal') && (subTab === 'pending' ? t.status === 'pending' : t.status !== 'pending')).length === 0 && (
+            <div className="py-20 text-center opacity-20 font-black italic uppercase tracking-widest text-slate-500 text-[10px]">لا توجد معاملات في هذا القسم</div>
+          )}
         </div>
       )}
 
       {tab === 'users' && (
         <div className="space-y-3">
            {users.map(u => (
-              <div key={u.id} className="bg-[#0b0f1a] border border-white/10 p-4 rounded-2xl flex justify-between items-center flex-row-reverse shadow-lg">
+              <div key={u.id} className="bg-[#0b0f1a] border border-white/10 p-4 rounded-2xl flex justify-between items-center flex-row-reverse shadow-lg hover:border-blue-500/50 transition-all">
                 <div className="text-right flex items-center gap-3 flex-row-reverse">
-                   <div className="w-10 h-10 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center"><img src={`https://api.dicebear.com/7.x/bottts/svg?seed=${u.id}`} className="w-8 h-8" alt="Avatar" /></div>
+                   <div className="w-10 h-10 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center shadow-md"><img src={`https://api.dicebear.com/7.x/bottts/svg?seed=${u.id}`} className="w-8 h-8" alt="Avatar" /></div>
                    <div className="space-y-0.5">
-                      <h4 className="font-black text-white italic text-sm">{u.first_name}</h4>
-                      <p className="text-[8px] text-slate-600 font-mono">{u.email}</p>
+                      <h4 className="font-black text-white italic text-sm leading-none">{u.first_name} {u.last_name}</h4>
+                      <p className="text-[8px] text-slate-600 font-mono leading-none">{u.email}</p>
                    </div>
                 </div>
-                <div className="text-left font-black italic text-blue-500">{u.balance.toFixed(2)}</div>
+                <div className="text-left font-black italic text-blue-500 text-lg leading-none">{u.balance.toFixed(2)}</div>
               </div>
             ))}
         </div>
