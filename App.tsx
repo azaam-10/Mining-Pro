@@ -55,8 +55,10 @@ const App: React.FC = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) fetchAllUserData(session.user.id);
-      else {
+      if (session) {
+        setLoading(true);
+        fetchAllUserData(session.user.id);
+      } else {
         setUserData(null);
         setLoading(false);
       }
@@ -133,17 +135,14 @@ const App: React.FC = () => {
   // تنفيذ المهمة اليومية (حصاد الأرباح)
   const completeTask = async (userMachine: UserMachine) => {
     const today = formatDate(new Date());
-    // Fixed: Accessed snake_case property to match the DB schema and updated interface
     if (userMachine.last_claim_date === today) return;
 
-    // Fixed: Accessed machine_id to match the DB schema and updated interface
     const machine = MACHINES.find(m => m.id === userMachine.machine_id);
     if (!machine) return;
 
     showToast(lang === 'ar' ? 'جاري تحويل الأرباح...' : 'Transferring profits...', 'info');
 
     // 1. تحديث الماكينة (تاريخ المطالبة، الرصيد المحقق، الأيام المتبقية)
-    // Fixed errors on line 146 and 147 by aligning with updated UserMachine snake_case properties
     const { error: updateErr } = await supabase.from('user_machines').update({
       last_claim_date: today,
       total_earned: userMachine.total_earned + machine.dailyProfit,
@@ -186,6 +185,25 @@ const App: React.FC = () => {
     return <AuthView lang={lang} setLang={setLang} t={t} showToast={showToast} />;
   }
 
+  // If we have a session but userData is still null (e.g., fetch failed or profile trigger delayed)
+  if (!userData) {
+    return (
+      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center gap-4 p-10 text-center">
+        <Loader2 className="animate-spin text-blue-500" size={48} />
+        <div className="space-y-2">
+          <p className="text-white font-black italic tracking-tighter uppercase text-sm">Initializing Secure Profile...</p>
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em]">Authenticating with V-Protocol Maingate</p>
+        </div>
+        <button 
+          onClick={() => supabase.auth.signOut()} 
+          className="mt-8 px-6 py-3 bg-red-500/10 text-red-500 rounded-xl border border-red-500/20 font-black text-[10px] uppercase tracking-widest"
+        >
+          {lang === 'ar' ? 'تسجيل الخروج' : 'Cancel & Sign Out'}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen pb-28 ${lang === 'ar' ? 'rtl text-right font-["Cairo"]' : 'text-left font-sans'} bg-[#020617] text-[#f8fafc] overflow-x-hidden relative`}>
       {showInfo && <InfoModal t={t} onClose={() => setShowInfo(false)} />}
@@ -226,11 +244,11 @@ const App: React.FC = () => {
 
       <main className="max-w-md mx-auto p-5 space-y-10 relative z-10">
         <Routes>
-          <Route path="/" element={<HomeView user={userData!} t={t} onShowInfo={() => setShowInfo(true)} />} />
-          <Route path="/machines" element={<MachinesView user={userData!} onBuy={buyMachine} t={t} />} />
-          <Route path="/tasks" element={<TasksView user={userData!} onComplete={completeTask} t={t} />} />
-          <Route path="/team" element={<TeamView user={userData!} t={t} />} />
-          <Route path="/profile" element={<ProfileView user={userData!} t={t} />} />
+          <Route path="/" element={<HomeView user={userData} t={t} onShowInfo={() => setShowInfo(true)} />} />
+          <Route path="/machines" element={<MachinesView user={userData} onBuy={buyMachine} t={t} />} />
+          <Route path="/tasks" element={<TasksView user={userData} onComplete={completeTask} t={t} />} />
+          <Route path="/team" element={<TeamView user={userData} t={t} />} />
+          <Route path="/profile" element={<ProfileView user={userData} t={t} />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
