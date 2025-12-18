@@ -222,13 +222,16 @@ const App: React.FC = () => {
     <div className={`min-h-screen pb-24 ${lang === 'ar' ? 'rtl font-["Cairo"]' : 'font-sans'} bg-[#020617] text-[#f8fafc] overflow-x-hidden relative`}>
       {isProcessing && (
         <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center">
-          <Loader2 className="animate-spin text-blue-500" size={32} />
+          <div className="bg-[#0b0f1a] p-6 rounded-2xl border border-white/10 flex flex-col items-center gap-4 shadow-2xl">
+             <Loader2 className="animate-spin text-blue-500" size={32} />
+             <p className="text-[10px] font-black uppercase text-white/60 tracking-widest">Processing Transaction...</p>
+          </div>
         </div>
       )}
 
       {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
-      {showRecharge && <RechargeModal t={t} onClose={() => setShowRecharge(false)} onDeposit={() => fetchAllUserData(session.user.id, session.user.email || '')} showToast={showToast} userId={session.user.id} />}
-      {showWithdraw && <WithdrawModal t={t} onClose={() => setShowWithdraw(false)} onWithdraw={() => fetchAllUserData(session.user.id, session.user.email || '')} max={userData.withdrawableBalance} userId={session.user.id} balance={userData.balance} showToast={showToast} isProcessing={isProcessing} />}
+      {showRecharge && <RechargeModal t={t} onClose={() => setShowRecharge(false)} onDeposit={() => fetchAllUserData(session.user.id, session.user.email || '')} showToast={showToast} userId={session.user.id} setIsProcessing={setIsProcessing} isProcessing={isProcessing} />}
+      {showWithdraw && <WithdrawModal t={t} onClose={() => setShowWithdraw(false)} onWithdraw={() => fetchAllUserData(session.user.id, session.user.email || '')} max={userData.withdrawableBalance} userId={session.user.id} balance={userData.balance} showToast={showToast} setIsProcessing={setIsProcessing} isProcessing={isProcessing} />}
       {showSupport && <SupportChatModal lang={lang} t={t} onClose={() => setShowSupport(false)} userId={session.user.id} />}
       
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-full max-w-[85%] space-y-2 pointer-events-none">
@@ -239,7 +242,7 @@ const App: React.FC = () => {
         ))}
       </div>
 
-      <header className="px-4 py-4 border-b border-white/5 backdrop-blur-xl sticky top-0 z-40 bg-[#020617]/80 flex justify-between items-center">
+      <header className="px-4 py-4 border-b border-white/5 backdrop-blur-xl sticky top-0 z-40 bg-[#020617]/80 flex justify-between items-center shadow-lg">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg"><Zap size={18} className="text-white fill-white" /></div>
           <span className="font-black italic text-lg tracking-tighter uppercase">MINE<span className="text-blue-500">PRO</span></span>
@@ -297,7 +300,7 @@ const ProtocolLoadingScreen = () => (
 
 const NavItem = ({ icon: Icon, label, active, onClick }: any) => (
   <button onClick={onClick} className={`flex flex-col items-center gap-1 transition-all ${active ? 'text-blue-500' : 'text-slate-700'}`}>
-    <div className={`p-2 rounded-lg ${active ? 'bg-blue-600/10' : ''}`}><Icon size={18} /></div>
+    <div className={`p-2 rounded-lg ${active ? 'bg-blue-600/10 shadow-lg' : ''}`}><Icon size={18} /></div>
     <span className="text-[8px] font-black uppercase tracking-widest">{label}</span>
   </button>
 );
@@ -328,8 +331,8 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, syncing
         </div>
       </div>
       <div className="flex gap-3 mt-6">
-        <button onClick={onShowRecharge} className="flex-1 bg-white text-black font-black py-3.5 rounded-xl flex items-center justify-center gap-2 text-[12px] uppercase shadow-xl"><ArrowDownCircle size={18} className="text-blue-600" /> {t('recharge')}</button>
-        <button onClick={onShowWithdraw} className="flex-1 bg-blue-600 text-white font-black py-3.5 rounded-xl flex items-center justify-center gap-2 text-[12px] uppercase shadow-xl"><ArrowUpCircle size={18} /> {t('withdraw')}</button>
+        <button onClick={onShowRecharge} className="flex-1 bg-white text-black font-black py-3.5 rounded-xl flex items-center justify-center gap-2 text-[12px] uppercase shadow-xl active:scale-95 transition-all"><ArrowDownCircle size={18} className="text-blue-600" /> {t('recharge')}</button>
+        <button onClick={onShowWithdraw} className="flex-1 bg-blue-600 text-white font-black py-3.5 rounded-xl flex items-center justify-center gap-2 text-[12px] uppercase shadow-xl active:scale-95 transition-all"><ArrowUpCircle size={18} /> {t('withdraw')}</button>
       </div>
     </div>
 
@@ -337,9 +340,9 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, syncing
        <h3 className="text-[10px] font-black uppercase text-slate-600 tracking-widest px-1">{t('history')}</h3>
        <div className="space-y-2.5">
          {user.transactions.slice(0, 5).map((tx: Transaction) => (
-           <div key={tx.id} className="bg-[#0b0f1a] border border-white/5 p-4 rounded-xl flex justify-between items-center flex-row-reverse">
+           <div key={tx.id} className="bg-[#0b0f1a] border border-white/5 p-4 rounded-xl flex justify-between items-center flex-row-reverse shadow-md">
               <div className="flex gap-3 flex-row-reverse items-center">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${tx.type === 'deposit' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : tx.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : tx.status === 'completed' ? 'bg-blue-500/10 text-blue-500' : 'bg-red-500/10 text-red-500'}`}>
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${tx.type === 'deposit' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : tx.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : tx.status === 'completed' ? 'bg-blue-500/10 text-blue-500 border-blue-500/10' : 'bg-red-500/10 text-red-500 border-red-500/10'}`}>
                   {tx.status === 'pending' ? <Clock size={18}/> : tx.type === 'task' ? <TrendingUp size={18}/> : <Activity size={18}/>}
                 </div>
                 <div className="text-right">
@@ -367,7 +370,7 @@ const MachinesView = ({ user, onBuy, t, isProcessing }: any) => (
           <div key={m.id} className="relative bg-[#0b0f1a] border border-white/5 rounded-2xl p-4 shadow-xl overflow-hidden">
             <div className="flex justify-between items-center flex-row-reverse mb-4 relative z-10">
                  <div className="flex gap-3 flex-row-reverse items-center">
-                    <div className={`w-12 h-12 bg-gradient-to-br ${m.color} rounded-xl flex items-center justify-center border border-white/10`}><Gem size={24} className="text-white" /></div>
+                    <div className={`w-12 h-12 bg-gradient-to-br ${m.color} rounded-xl flex items-center justify-center border border-white/10 shadow-lg`}><Gem size={24} className="text-white" /></div>
                     <div className="text-right">
                        <h3 className="font-black text-[13px] text-white uppercase italic leading-none">{m.name}</h3>
                        <p className="text-[8px] text-white/30 font-bold mt-1 tracking-widest">Protocol Node</p>
@@ -388,7 +391,7 @@ const MachinesView = ({ user, onBuy, t, isProcessing }: any) => (
                 <p className="text-lg font-black text-white italic">{m.duration} ي</p>
               </div>
             </div>
-            <button onClick={() => onBuy(m)} disabled={owned || isProcessing} className={`w-full py-3.5 rounded-xl font-black text-[11px] uppercase tracking-widest ${owned ? 'bg-slate-900 text-slate-700' : 'bg-white text-black active:scale-95 disabled:opacity-50'}`}>
+            <button onClick={() => onBuy(m)} disabled={owned || isProcessing} className={`w-full py-3.5 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all ${owned ? 'bg-slate-900 text-slate-700' : 'bg-white text-black active:scale-95 disabled:opacity-50'}`}>
               {owned ? 'العقد مفعل' : 'تفعيل العقد'}
             </button>
           </div>
@@ -446,7 +449,7 @@ const TasksView = ({ user, onComplete, t, isProcessing }: any) => {
             const isLocked = um.last_claim_date && (now - lastClaim < 24 * 60 * 60 * 1000);
 
             return (
-              <div key={um.id} className={`bg-[#0b0f1a] border ${isLocked ? 'border-white/5' : 'border-emerald-500/20'} rounded-2xl p-4 shadow-xl text-right`}>
+              <div key={um.id} className={`bg-[#0b0f1a] border ${isLocked ? 'border-white/5' : 'border-emerald-500/20 shadow-md'} rounded-2xl p-4 shadow-xl text-right`}>
                 <div className="flex justify-between items-center flex-row-reverse mb-4">
                   <div className="text-right">
                     <h4 className="font-black text-sm text-white uppercase italic">{m?.name}</h4>
@@ -460,7 +463,7 @@ const TasksView = ({ user, onComplete, t, isProcessing }: any) => {
                 <button 
                   disabled={isLocked || isProcessing} 
                   onClick={() => onComplete(um)} 
-                  className={`w-full py-4 rounded-xl font-black uppercase text-[11px] tracking-widest transition-all ${isLocked ? 'bg-slate-900/50 text-slate-500' : 'bg-emerald-600 text-white active:scale-95 shadow-lg'}`}
+                  className={`w-full py-4 rounded-xl font-black uppercase text-[11px] tracking-widest transition-all ${isLocked ? 'bg-slate-900/50 text-slate-500 border border-white/5' : 'bg-emerald-600 text-white active:scale-95 shadow-lg'}`}
                 >
                   {isLocked ? (
                     <CountdownTimer lastClaimDate={um.last_claim_date} onFinish={() => {}} />
@@ -487,7 +490,7 @@ const TeamView = ({ user, t }: any) => (
       <div className="text-right space-y-2">
         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">كود الإحالة</p>
         <div className="bg-black/40 p-4 rounded-xl flex items-center gap-3 border border-white/5">
-          <button onClick={() => {navigator.clipboard.writeText(user.referral_code); alert('تم النسخ')}} className="p-3 bg-blue-600 text-white rounded-xl shadow-lg"><Copy size={18}/></button>
+          <button onClick={() => {navigator.clipboard.writeText(user.referral_code); alert('تم النسخ')}} className="p-3 bg-blue-600 text-white rounded-xl shadow-lg active:scale-90 transition-all"><Copy size={18}/></button>
           <span className="text-sm font-mono text-white flex-1 text-center tracking-widest">{user.referral_code}</span>
         </div>
       </div>
@@ -510,7 +513,7 @@ const ProfileView = ({ user, t }: any) => (
     <div className="relative p-6 bg-[#0b0f1a] border border-white/10 rounded-3xl shadow-xl flex items-center gap-6 flex-row-reverse justify-between">
        <div className="space-y-2 text-right z-10">
           <h3 className="text-2xl font-black italic text-white leading-tight">{user.first_name}<br/>{user.last_name}</h3>
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600/10 border border-blue-500/30 rounded-lg">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600/10 border border-blue-500/30 rounded-lg shadow-sm">
              <ShieldCheck size={14} className="text-blue-500" />
              <span className="text-[9px] font-black uppercase text-blue-500 tracking-widest">Elite Member</span>
           </div>
@@ -520,11 +523,11 @@ const ProfileView = ({ user, t }: any) => (
        </div>
     </div>
     <div className="grid grid-cols-2 gap-4">
-      <div className="bg-[#0b0f1a] border border-white/10 rounded-2xl p-5 text-right">
+      <div className="bg-[#0b0f1a] border border-white/10 rounded-2xl p-5 text-right shadow-md">
          <p className="text-[9px] text-slate-700 font-black uppercase mb-1 leading-none">إجمالي السحب</p>
          <p className="text-2xl font-black text-red-500 italic leading-none">{Number(user.totalWithdraw).toFixed(2)}</p>
       </div>
-      <div className="bg-[#0b0f1a] border border-white/10 rounded-2xl p-5 text-right">
+      <div className="bg-[#0b0f1a] border border-white/10 rounded-2xl p-5 text-right shadow-md">
          <p className="text-[9px] text-slate-700 font-black uppercase mb-1 leading-none">إجمالي الإيداع</p>
          <p className="text-2xl font-black text-emerald-500 italic leading-none">{Number(user.totalRecharge).toFixed(2)}</p>
       </div>
@@ -542,8 +545,8 @@ const AuthView = ({ lang, t, showToast }: any) => {
     let interval: any;
     if (loading && handshakeTime < 100) {
       interval = setInterval(() => {
-        setHandshakeTime(prev => Math.min(prev + 2, 100));
-      }, 50);
+        setHandshakeTime(prev => Math.min(prev + 5, 100)); // Faster increment (5 instead of 2)
+      }, 30); // Faster speed
     }
     return () => clearInterval(interval);
   }, [loading, handshakeTime]);
@@ -553,8 +556,8 @@ const AuthView = ({ lang, t, showToast }: any) => {
     setLoading(true);
     setHandshakeTime(0);
     
-    // Simulate security delay for visual impact
-    await new Promise(r => setTimeout(r, 2000));
+    // Artificial delay reduced to 800ms for responsiveness while keeping the effect
+    await new Promise(r => setTimeout(r, 800));
 
     try {
       if (isLogin) {
@@ -563,7 +566,7 @@ const AuthView = ({ lang, t, showToast }: any) => {
           password: formData.password 
         });
         if (error) { 
-           showToast("خطأ في البيانات", 'error'); 
+           showToast("خطأ في بيانات الدخول", 'error'); 
            setLoading(false); 
         }
       } else {
@@ -573,25 +576,23 @@ const AuthView = ({ lang, t, showToast }: any) => {
           options: { data: { first_name: formData.firstName, last_name: formData.lastName, referred_by: formData.referralCode } }
         });
         if (error) { showToast(error.message, 'error'); setLoading(false); }
-        else { showToast('تم الحساب، سجل دخولك', 'success'); setIsLogin(true); setLoading(false); }
+        else { showToast('تم إنشاء الحساب، سجل دخولك الآن', 'success'); setIsLogin(true); setLoading(false); }
       }
-    } catch (err: any) { showToast("فشل الاتصال", 'error'); setLoading(false); }
+    } catch (err: any) { showToast("فشل الاتصال بالخادم", 'error'); setLoading(false); }
   };
 
   if (loading) return (
     <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-10 space-y-8 animate-in fade-in">
        <div className="relative">
-          <div className="w-32 h-32 rounded-full border-2 border-blue-500/10 flex items-center justify-center">
+          <div className="w-32 h-32 rounded-full border-2 border-blue-500/10 flex items-center justify-center shadow-2xl">
              <div className="absolute inset-0 border-t-2 border-blue-500 rounded-full animate-spin"></div>
-             <span className="text-2xl font-black text-blue-500 italic font-mono">{handshakeTime}%</span>
+             <span className="text-3xl font-black text-blue-500 italic font-mono">{handshakeTime}%</span>
           </div>
+          <Activity className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-blue-500/40 animate-pulse" size={40} />
        </div>
        <div className="text-center space-y-2">
-          <p className="text-white font-black uppercase text-xs tracking-widest italic animate-pulse">Security Handshake...</p>
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Encrypting Protocol Sync</p>
-       </div>
-       <div className="w-full max-w-[200px] h-1 bg-white/5 rounded-full overflow-hidden">
-          <div className="h-full bg-blue-600 transition-all duration-300" style={{width: `${handshakeTime}%`}}></div>
+          <p className="text-white font-black uppercase text-xs tracking-widest italic animate-pulse">Syncing Network...</p>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Validating Digital Signature</p>
        </div>
     </div>
   );
@@ -612,7 +613,7 @@ const AuthView = ({ lang, t, showToast }: any) => {
             {!isLogin && <div className="grid grid-cols-2 gap-3"><Input icon={UserIcon} placeholder="الأول" value={formData.firstName} onChange={(v: string) => setFormData({...formData, firstName: v})} /><Input icon={UserIcon} placeholder="الأخير" value={formData.lastName} onChange={(v: string) => setFormData({...formData, lastName: v})} /></div>}
             <Input icon={Mail} type="email" placeholder="البريد الإلكتروني" value={formData.email} onChange={(v: string) => setFormData({...formData, email: v})} />
             <Input icon={Key} type="password" placeholder="كلمة المرور" value={formData.password} onChange={(v: string) => setFormData({...formData, password: v})} />
-            <button disabled={loading} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase tracking-widest text-[11px] shadow-2xl active:scale-95 transition-all flex justify-center items-center disabled:opacity-50">
+            <button disabled={loading} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase tracking-widest text-[11px] shadow-2xl active:scale-95 transition-all flex justify-center items-center">
               دخول النظام
             </button>
           </form>
@@ -625,7 +626,7 @@ const AuthView = ({ lang, t, showToast }: any) => {
 const Input = ({ icon: Icon, type = "text", placeholder, value, onChange }: any) => (
   <div className="relative group">
     <div className="absolute inset-y-0 right-4 flex items-center text-slate-800 group-focus-within:text-blue-500 transition-colors"><Icon size={18} /></div>
-    <input type={type} required placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-[#020617] border border-white/5 pr-11 pl-4 py-3.5 rounded-xl text-xs font-bold outline-none focus:border-blue-500/40 text-white placeholder:text-slate-800" />
+    <input type={type} required placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-[#020617] border border-white/5 pr-11 pl-4 py-3.5 rounded-xl text-xs font-bold outline-none focus:border-blue-500/40 text-white placeholder:text-slate-800 transition-all shadow-inner" />
   </div>
 );
 
@@ -646,7 +647,7 @@ const AdminView = ({ t, showToast }: any) => {
       if (profilesRes.data) setUsers(profilesRes.data);
       if (txsRes.data) setTxs(txsRes.data);
     } catch (e) { 
-      showToast("خطأ في الجلب", "error"); 
+      showToast("خطأ في جلب بيانات الإدارة", "error"); 
     } finally { 
       setLoading(false); 
     }
@@ -667,9 +668,9 @@ const AdminView = ({ t, showToast }: any) => {
       }
       await supabase.from('transactions').update({ status: newStatus }).eq('id', tx.id);
       fetchData();
-      showToast(`تم التحديث`, 'success');
+      showToast(`تم تحديث حالة المعاملة`, 'success');
     } catch (e) {
-      showToast("فشل التحديث", "error");
+      showToast("فشل تحديث المعاملة", "error");
     }
   };
 
@@ -685,64 +686,65 @@ const AdminView = ({ t, showToast }: any) => {
     <div className="space-y-6 animate-in fade-in">
       <div className="flex bg-[#0b0f1a] p-1 rounded-2xl border border-white/10 shadow-xl overflow-x-auto no-scrollbar">
         {['deposits', 'withdrawals', 'users'].map((t: any) => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-1 py-3 rounded-lg font-black text-[9px] uppercase px-4 ${tab === t ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-600'}`}>{t === 'deposits' ? 'إيداع' : t === 'withdrawals' ? 'سحب' : 'أعضاء'}</button>
+          <button key={t} onClick={() => setTab(t)} className={`flex-1 py-3 rounded-lg font-black text-[9px] uppercase px-4 transition-all ${tab === t ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-600'}`}>{t === 'deposits' ? 'إيداع' : t === 'withdrawals' ? 'سحب' : 'أعضاء'}</button>
         ))}
       </div>
 
       {(tab === 'deposits' || tab === 'withdrawals') && (
-        <div className="flex bg-[#020617] p-1 rounded-xl border border-white/5 w-fit mx-auto">
-          <button onClick={() => setHistoryMode(false)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${!historyMode ? 'bg-blue-600 text-white' : 'text-slate-700'}`}>الطلبات الجديدة</button>
-          <button onClick={() => setHistoryMode(true)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${historyMode ? 'bg-blue-600 text-white' : 'text-slate-700'}`}>السجل</button>
+        <div className="flex bg-[#020617] p-1 rounded-xl border border-white/5 w-fit mx-auto shadow-inner">
+          <button onClick={() => setHistoryMode(false)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${!historyMode ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700'}`}>الطلبات الجديدة</button>
+          <button onClick={() => setHistoryMode(true)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${historyMode ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700'}`}>سجل الأرشيف</button>
         </div>
       )}
 
       <div className="space-y-4">
           {filteredTxs.map(t => (
-            <div key={t.id} className="bg-[#0b0f1a] border border-white/5 p-5 rounded-2xl text-right space-y-4 shadow-xl">
+            <div key={t.id} className="bg-[#0b0f1a] border border-white/5 p-5 rounded-2xl text-right space-y-4 shadow-xl border-l-4 border-l-blue-500/20">
                <div className="flex justify-between items-center flex-row-reverse border-b border-white/5 pb-4">
-                  <div>
-                    <p className="text-[9px] font-black text-slate-500 uppercase italic">المبلغ</p>
+                  <div className="text-right">
+                    <p className="text-[9px] font-black text-slate-500 uppercase italic">المبلغ بالعملة</p>
                     <div className="text-left font-black italic text-2xl text-white">{Math.abs(t.amount)} USDT</div>
                   </div>
                   {historyMode && (
-                    <span className={`px-2 py-1 rounded text-[8px] font-black uppercase ${t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                    <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase border ${t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
                       {t.status === 'completed' ? 'تم القبول' : 'مرفوض'}
                     </span>
                   )}
                </div>
-               {t.details && <p className="text-[10px] font-mono text-blue-400 break-all bg-black/40 p-2 rounded-lg">{t.details}</p>}
+               {t.details && <p className="text-[10px] font-mono text-blue-400 break-all bg-black/40 p-3 rounded-xl border border-white/5">{t.details}</p>}
                {t.proof_url && (
-                <div className="relative group cursor-pointer" onClick={() => window.open(t.proof_url, '_blank')}>
-                   <img src={t.proof_url} className="w-full h-auto max-h-48 object-contain rounded-xl border border-white/10" alt="Proof" />
-                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                <div className="relative group cursor-pointer overflow-hidden rounded-xl border border-white/10" onClick={() => window.open(t.proof_url, '_blank')}>
+                   <img src={t.proof_url} className="w-full h-auto max-h-48 object-contain bg-black/50" alt="Proof" />
+                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <ExternalLink className="text-white" size={24} />
+                      <span className="text-white text-[10px] font-bold mr-2 uppercase">عرض بالحجم الكامل</span>
                    </div>
                 </div>
                )}
                {!historyMode && (
-                 <div className="flex gap-2">
-                    <button onClick={() => handleAction(t, 'completed')} className="flex-1 bg-white text-black font-black py-3 rounded-xl uppercase text-[10px] shadow-lg active:scale-95 transition-all">موافقة</button>
-                    <button onClick={() => handleAction(t, 'failed')} className="flex-1 bg-red-600/10 text-red-500 border border-red-500/20 font-black py-3 rounded-xl uppercase text-[10px] active:scale-95 transition-all">رفض</button>
+                 <div className="flex gap-2 pt-2">
+                    <button onClick={() => handleAction(t, 'completed')} className="flex-1 bg-white text-black font-black py-4 rounded-xl uppercase text-[10px] shadow-xl active:scale-95 transition-all">تفعيل الطلب</button>
+                    <button onClick={() => handleAction(t, 'failed')} className="flex-1 bg-red-600/10 text-red-500 border border-red-500/20 font-black py-4 rounded-xl uppercase text-[10px] active:scale-95 transition-all">إلغاء الطلب</button>
                  </div>
                )}
             </div>
           ))}
           {filteredTxs.length === 0 && (tab !== 'users') && (
-            <div className="text-center py-20 text-slate-700 text-[10px] font-black uppercase italic tracking-widest">لا يوجد معاملات لعرضها</div>
+            <div className="text-center py-24 text-slate-800 text-[10px] font-black uppercase italic tracking-widest animate-pulse">لا يوجد معاملات في هذا القسم حالياً</div>
           )}
 
           {tab === 'users' && users.map(u => (
-            <div key={u.id} className="bg-[#0b0f1a] border border-white/10 p-4 rounded-2xl flex justify-between items-center flex-row-reverse shadow-lg">
+            <div key={u.id} className="bg-[#0b0f1a] border border-white/10 p-5 rounded-2xl flex justify-between items-center flex-row-reverse shadow-xl hover:border-blue-500/30 transition-all group">
               <div className="text-right flex items-center gap-3 flex-row-reverse">
-                 <div className="w-10 h-10 bg-blue-600/10 rounded-lg flex items-center justify-center border border-blue-500/20">
-                    <UserIcon size={20} className="text-blue-500" />
+                 <div className="w-12 h-12 bg-blue-600/10 rounded-xl flex items-center justify-center border border-blue-500/20 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                    <UserIcon size={22} className="transition-all" />
                  </div>
                  <div>
-                    <h4 className="font-black text-white italic text-sm">{u.first_name}</h4>
-                    <p className="text-[8px] text-slate-600 font-mono">{u.email || u.id.substring(0, 15)}</p>
+                    <h4 className="font-black text-white italic text-base leading-none">{u.first_name}</h4>
+                    <p className="text-[9px] text-slate-600 font-mono mt-1">{u.email || u.id.substring(0, 15)}</p>
                  </div>
               </div>
-              <div className="text-left font-black italic text-blue-500 text-lg">{u.balance.toFixed(2)}</div>
+              <div className="text-left font-black italic text-blue-500 text-xl tracking-tighter">{u.balance.toFixed(2)}</div>
             </div>
           ))}
       </div>
@@ -750,11 +752,11 @@ const AdminView = ({ t, showToast }: any) => {
   );
 };
 
-const RechargeModal = ({ t, onClose, onDeposit, showToast, userId }: any) => {
+const RechargeModal = ({ t, onClose, onDeposit, showToast, userId, setIsProcessing, isProcessing }: any) => {
   const [amount, setAmount] = useState('');
   const [image, setImage] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [internalLoading, setInternalLoading] = useState(false);
 
   const handleFileUpload = (e: any) => {
     const file = e.target.files[0];
@@ -766,17 +768,20 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId }: any) => {
   };
 
   const submit = async () => {
-    if (!amount || !image) return showToast("أكمل البيانات", "error");
+    if (internalLoading || isProcessing) return;
+    if (!amount || !image) return showToast("يرجى إكمال جميع البيانات المطلوبة", "error");
     
-    setIsUploading(true);
+    setInternalLoading(true);
+    setIsProcessing(true);
+    
     let currentProgress = 0;
     const interval = setInterval(() => {
-      currentProgress += 5;
+      currentProgress += 10;
       setProgress(currentProgress);
       if (currentProgress >= 100) clearInterval(interval);
-    }, 250); // Takes ~5 seconds
+    }, 400); // Takes ~4 seconds for full animation
 
-    await new Promise(r => setTimeout(r, 5000));
+    await new Promise(r => setTimeout(r, 4500));
     
     try {
       await supabase.from('transactions').insert({ 
@@ -790,81 +795,98 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId }: any) => {
       onDeposit();
       onClose();
     } catch (e) {
-      showToast("خطأ في الاتصال", "error");
+      showToast("خطأ في الاتصال بالبروتوكول", "error");
     } finally {
-      setIsUploading(false);
+      setInternalLoading(false);
+      setIsProcessing(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in">
       <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-sm rounded-3xl p-6 space-y-5 animate-in zoom-in-95 shadow-2xl overflow-hidden relative">
-        {isUploading && (
-          <div className="absolute inset-0 z-50 bg-[#0b0f1a]/95 flex flex-col items-center justify-center p-8 text-center space-y-6 animate-in fade-in">
-             <div className="w-20 h-20 bg-blue-600/10 rounded-full flex items-center justify-center relative">
-                <div className="absolute inset-0 border-2 border-blue-500/20 rounded-full"></div>
-                <div className="absolute inset-0 border-t-2 border-blue-500 rounded-full animate-spin"></div>
-                <UploadCloud className="text-blue-500 animate-bounce" size={32} />
+        {internalLoading && (
+          <div className="absolute inset-0 z-50 bg-[#0b0f1a]/98 flex flex-col items-center justify-center p-8 text-center space-y-6 animate-in fade-in">
+             <div className="w-24 h-24 bg-blue-600/10 rounded-full flex items-center justify-center relative shadow-2xl">
+                <div className="absolute inset-0 border-4 border-blue-500/10 rounded-full"></div>
+                <div className="absolute inset-0 border-t-4 border-blue-500 rounded-full animate-spin"></div>
+                <UploadCloud className="text-blue-500 animate-pulse" size={36} />
              </div>
-             <div className="space-y-1">
-                <p className="text-white font-black uppercase text-sm italic tracking-widest">Securing Protocol Transaction</p>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Encrypting Proof {progress}%</p>
+             <div className="space-y-2">
+                <p className="text-white font-black uppercase text-base italic tracking-tighter">Securing Transaction</p>
+                <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Encrypting Proof {progress}%</p>
              </div>
-             <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-600 transition-all duration-300" style={{width: `${progress}%`}}></div>
+             <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden shadow-inner">
+                <div className="h-full bg-blue-600 transition-all duration-300 shadow-[0_0_10px_rgba(37,99,235,0.8)]" style={{width: `${progress}%`}}></div>
              </div>
           </div>
         )}
 
-        <div className="flex justify-between items-center bg-blue-600 p-4 rounded-xl shadow-lg">
+        <div className="flex justify-between items-center bg-blue-600 p-4 rounded-xl shadow-xl">
           <h3 className="font-black text-white text-sm uppercase tracking-tighter italic">إيداع أصول بروتوكول</h3>
-          <button onClick={onClose} className="text-white hover:bg-white/10 p-1 rounded-lg transition-colors"><X size={20} /></button>
+          <button onClick={onClose} className="text-white hover:bg-white/10 p-1 rounded-lg transition-all"><X size={20} /></button>
         </div>
         
-        <div className="bg-blue-600/5 border border-blue-500/10 p-4 rounded-xl space-y-3 text-right">
-           <p className="text-[9px] font-black text-blue-500 uppercase italic">عنوان المحفظة (BEP20)</p>
-           <div className="bg-black/40 p-3 rounded-lg flex items-center gap-3 border border-white/5 shadow-inner">
-              <button onClick={() => {navigator.clipboard.writeText(DEPOSIT_ADDRESS); showToast('تم النسخ', 'success')}} className="p-2 bg-blue-600 text-white rounded-lg active:scale-90 transition-all shadow-lg"><Copy size={16}/></button>
-              <span className="text-[9px] font-mono text-slate-500 break-all flex-1 text-center">{DEPOSIT_ADDRESS}</span>
+        <div className="bg-blue-600/5 border border-blue-500/10 p-5 rounded-2xl space-y-3 text-right shadow-inner">
+           <p className="text-[9px] font-black text-blue-500 uppercase italic">عنوان محفظة الإيداع (BEP20)</p>
+           <div className="bg-black/40 p-4 rounded-xl flex items-center gap-3 border border-white/5 shadow-inner">
+              <button onClick={() => {navigator.clipboard.writeText(DEPOSIT_ADDRESS); showToast('تم نسخ العنوان بنجاح', 'success')}} className="p-2.5 bg-blue-600 text-white rounded-xl active:scale-90 transition-all shadow-lg"><Copy size={16}/></button>
+              <span className="text-[9px] font-mono text-slate-500 break-all flex-1 text-center font-bold">{DEPOSIT_ADDRESS}</span>
            </div>
         </div>
 
         <div className="space-y-2 text-right">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">المبلغ المراد شحنه</p>
-          <input type="number" placeholder="USDT" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center text-3xl outline-none focus:border-blue-500/40 transition-all shadow-inner" />
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">المبلغ المراد شحنه (USDT)</p>
+          <input type="number" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl text-white font-black text-center text-3xl outline-none focus:border-blue-500/40 transition-all shadow-inner" />
         </div>
 
         <div className="space-y-3 text-right">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">إثبات التحويل</p>
-          <label className="block border-2 border-dashed border-white/10 rounded-2xl p-6 text-center bg-white/5 cursor-pointer hover:border-blue-500/20 transition-all shadow-inner">
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">إثبات التحويل (Screenshot)</p>
+          <label className="block border-2 border-dashed border-white/10 rounded-2xl p-8 text-center bg-white/5 cursor-pointer hover:border-blue-500/30 transition-all shadow-inner relative group">
              <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
              {image ? (
-               <img src={image} className="w-24 h-24 mx-auto rounded-xl object-cover border-2 border-blue-500 shadow-xl" />
+               <img src={image} className="w-24 h-24 mx-auto rounded-xl object-cover border-2 border-blue-500 shadow-2xl" />
              ) : (
-               <div className="space-y-2 opacity-50">
-                 <UploadCloud size={32} className="mx-auto text-blue-500" />
-                 <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">رفع لقطة الشاشة</p>
+               <div className="space-y-3">
+                 <UploadCloud size={40} className="mx-auto text-blue-500 opacity-60 group-hover:opacity-100 transition-all" />
+                 <p className="text-[10px] uppercase font-black text-slate-600 tracking-widest">إرفاق لقطة الشاشة</p>
                </div>
              )}
           </label>
         </div>
 
-        <button onClick={submit} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase text-xs active:scale-95 transition-all shadow-xl hover:bg-slate-50">تأكيد عملية الإيداع</button>
+        <button onClick={submit} disabled={internalLoading || isProcessing} className="w-full bg-white text-black font-black py-4.5 rounded-2xl uppercase text-xs active:scale-95 transition-all shadow-2xl hover:bg-slate-50 flex items-center justify-center gap-2">
+           {internalLoading ? <Loader2 className="animate-spin" size={16} /> : "إرسال طلب الإيداع"}
+        </button>
       </div>
     </div>
   );
 };
 
-const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast, isProcessing }: any) => {
+const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast, setIsProcessing, isProcessing }: any) => {
   const [amount, setAmount] = useState('');
   const [address, setAddress] = useState('');
+  const [internalLoading, setInternalLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   
   const submit = async () => {
-    if (isProcessing) return;
+    if (internalLoading || isProcessing) return;
     const amt = Number(amount);
-    if (amt < MIN_WITHDRAWAL) return showToast(`الحد الأدنى ${MIN_WITHDRAWAL}`, 'error');
-    if (amt > max) return showToast("رصيد غير كافٍ", "error");
-    if (!address.trim()) return showToast("أدخل عنوان المحفظة", "error");
+    if (amt < MIN_WITHDRAWAL) return showToast(`الحد الأدنى للسحب هو ${MIN_WITHDRAWAL} USDT`, 'error');
+    if (amt > max) return showToast("عذراً، رصيدك المتاح للسحب غير كافٍ", "error");
+    if (!address.trim()) return showToast("يرجى إدخال عنوان المحفظة بشكل صحيح", "error");
+    
+    setInternalLoading(true);
+    setIsProcessing(true);
+
+    let currentProgress = 0;
+    const interval = setInterval(() => {
+      currentProgress += 10;
+      setProgress(currentProgress);
+      if (currentProgress >= 100) clearInterval(interval);
+    }, 400);
+
+    await new Promise(r => setTimeout(r, 4500));
     
     try {
       await supabase.from('transactions').insert({ 
@@ -872,38 +894,67 @@ const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast
         type: 'withdrawal', 
         amount: -amt, 
         status: 'pending', 
-        details: `Addr: ${address}` 
+        details: `Address: ${address}` 
       });
       await supabase.from('profiles').update({ 
         balance: balance - amt, 
         withdrawable_balance: max - amt 
       }).eq('id', userId);
-      onWithdraw(); onClose(); showToast("تم طلب السحب بنجاح", 'success');
+      
+      onWithdraw(); 
+      onClose(); 
+      showToast("تم إرسال طلب تسييل الأصول بنجاح", 'success');
     } catch (e) {
-      showToast("خطأ معالجة", "error");
+      showToast("فشل في معالجة طلب السحب", "error");
+    } finally {
+      setInternalLoading(false);
+      setIsProcessing(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in">
-      <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-sm rounded-3xl p-6 space-y-6 animate-in zoom-in-95 shadow-2xl">
-        <div className="flex justify-between items-center bg-red-600 p-4 rounded-xl shadow-lg">
-          <h3 className="font-black text-white text-sm uppercase italic tracking-tighter">تسييل الأصول الرقمية</h3>
-          <button onClick={onClose} className="text-white"><X size={20} /></button>
+      <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-sm rounded-3xl p-6 space-y-6 animate-in zoom-in-95 shadow-2xl relative overflow-hidden">
+        {internalLoading && (
+          <div className="absolute inset-0 z-50 bg-[#0b0f1a]/98 flex flex-col items-center justify-center p-8 text-center space-y-6 animate-in fade-in">
+             <div className="w-24 h-24 bg-red-600/10 rounded-full flex items-center justify-center relative shadow-2xl">
+                <div className="absolute inset-0 border-4 border-red-500/10 rounded-full"></div>
+                <div className="absolute inset-0 border-t-4 border-red-600 rounded-full animate-spin"></div>
+                <Activity className="text-red-500 animate-pulse" size={36} />
+             </div>
+             <div className="space-y-2">
+                <p className="text-white font-black uppercase text-base italic tracking-tighter">Securing Withdrawal</p>
+                <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Encrypting Wallet Protocol {progress}%</p>
+             </div>
+             <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden shadow-inner">
+                <div className="h-full bg-red-600 transition-all duration-300 shadow-[0_0_10px_rgba(220,38,38,0.8)]" style={{width: `${progress}%`}}></div>
+             </div>
+          </div>
+        )}
+
+        <div className="flex justify-between items-center bg-red-600 p-4 rounded-xl shadow-2xl">
+          <h3 className="font-black text-white text-sm uppercase italic tracking-tighter">تسييل أصول البروتوكول</h3>
+          <button onClick={onClose} className="text-white hover:bg-white/10 p-1 rounded-lg transition-all"><X size={20} /></button>
         </div>
-        <div className="bg-red-600/5 p-4 rounded-xl flex justify-between items-center flex-row-reverse border border-white/5 shadow-inner">
-           <span className="text-[9px] font-black text-slate-500 uppercase">متاح للسحب</span>
-           <span className="text-xl font-black text-red-500 italic">{max.toFixed(2)} USDT</span>
+        
+        <div className="bg-red-600/5 p-5 rounded-2xl flex justify-between items-center flex-row-reverse border border-red-500/10 shadow-inner">
+           <span className="text-[9px] font-black text-slate-500 uppercase">متاح للتسييل</span>
+           <span className="text-2xl font-black text-red-500 italic tracking-tighter">{max.toFixed(2)} USDT</span>
         </div>
+
         <div className="space-y-2 text-right">
-           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">عنوان المحفظة (BEP20)</p>
-           <input value={address} onChange={e => setAddress(e.target.value)} placeholder="0x... (BEP20)" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-mono text-xs outline-none focus:border-red-500/40 transition-all shadow-inner" />
+           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">عنوان المحفظة المستلمة (BEP20)</p>
+           <input value={address} onChange={e => setAddress(e.target.value)} placeholder="0x... (BEP20 Network Only)" className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl text-white font-mono text-xs outline-none focus:border-red-500/40 transition-all shadow-inner" />
         </div>
+
         <div className="space-y-2 text-right">
-           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">المبلغ المطلوب</p>
-           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="المبلغ (8+)" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center text-3xl outline-none focus:border-red-500/40 transition-all shadow-inner" />
+           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">المبلغ المراد سحبه (Min 8)</p>
+           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl text-white font-black text-center text-3xl outline-none focus:border-red-500/40 transition-all shadow-inner" />
         </div>
-        <button onClick={submit} disabled={isProcessing} className="w-full bg-red-600 text-white font-black py-4 rounded-xl uppercase text-xs active:scale-95 disabled:opacity-50 transition-all shadow-xl">تأكيد طلب التسييل</button>
+
+        <button onClick={submit} disabled={internalLoading || isProcessing} className="w-full bg-red-600 text-white font-black py-4.5 rounded-2xl uppercase text-xs active:scale-95 transition-all shadow-2xl disabled:opacity-50 flex items-center justify-center gap-2">
+           {internalLoading ? <Loader2 className="animate-spin" size={16} /> : "تأكيد طلب التسييل"}
+        </button>
       </div>
     </div>
   );
@@ -913,11 +964,11 @@ const InfoModal = ({ onClose }: any) => (
   <div className="fixed inset-0 z-[250] flex items-center justify-center p-6 bg-[#020617]/95 backdrop-blur-xl animate-in fade-in">
     <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-xs rounded-3xl p-8 text-right space-y-6 animate-in zoom-in-95 shadow-2xl">
       <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-500 mx-auto border border-blue-500/20 shadow-lg"><ShieldCheck size={32}/></div>
-      <h3 className="font-black text-white text-xl uppercase italic text-center tracking-tighter">بروتوكول الأمان V-2</h3>
+      <h3 className="font-black text-white text-xl uppercase italic text-center tracking-tighter leading-none">بروتوكول الأمان العالي</h3>
       <p className="text-[11px] leading-relaxed text-slate-400 font-medium italic text-center">
-        نظام MINEPRO مؤمن بالكامل عبر بروتوكولات التشفير المتعددة. يتم تسييل الأصول عبر شبكة عالمية موزعة لضمان عوائد مستقرة بأقصى درجات الخصوصية والأمان.
+        نظام MINEPRO مؤمن بالكامل عبر تقنية التشفير المتقدمة. يتم تسييل الأصول عبر شبكة عالمية موزعة لضمان عوائد مستقرة وفورية بأقصى درجات الخصوصية والأمان المالي.
       </p>
-      <button onClick={onClose} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase text-[10px] active:scale-95 transition-all shadow-xl">فهمت، استمرار</button>
+      <button onClick={onClose} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase text-[10px] active:scale-95 transition-all shadow-xl">فهمت، متابعة</button>
     </div>
   </div>
 );
@@ -950,11 +1001,11 @@ const SupportChatModal = ({ userId, onClose }: any) => {
 
   return (
     <div className="fixed inset-0 z-[200] bg-[#020617]/98 backdrop-blur-xl flex flex-col animate-in fade-in">
-      <div className="p-5 border-b border-white/5 flex justify-between items-center bg-[#0b0f1a] shadow-xl">
+      <div className="p-5 border-b border-white/5 flex justify-between items-center bg-[#0b0f1a] shadow-2xl">
         <button onClick={onClose} className="p-3 bg-white/5 rounded-xl text-slate-400 active:scale-90 transition-all"><X size={20}/></button>
-        <h3 className="font-black text-white italic text-lg uppercase tracking-tighter">الدردشة الأمنة للبروتوكول</h3>
+        <h3 className="font-black text-white italic text-lg uppercase tracking-tighter">مركز الدعم الأمن</h3>
       </div>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar bg-gradient-to-b from-[#020617] to-black">
         {messages.map(m => (
           <div key={m.id} className={`flex ${m.sender_id === userId ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[85%] p-4 rounded-2xl text-[13px] font-bold shadow-lg ${m.sender_id === userId ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white/5 text-slate-300 border border-white/5 rounded-tl-none'}`}>
@@ -962,10 +1013,16 @@ const SupportChatModal = ({ userId, onClose }: any) => {
             </div>
           </div>
         ))}
+        {messages.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center space-y-4 opacity-20">
+             <MessageCircle size={64} className="text-slate-500" />
+             <p className="text-[10px] font-black uppercase tracking-widest">ابدأ محادثة مع الدعم</p>
+          </div>
+        )}
       </div>
       <div className="p-6 bg-[#0b0f1a]/80 border-t border-white/5 flex gap-3 shadow-2xl">
-        <button onClick={sendMessage} className="p-4 bg-blue-600 text-white rounded-xl active:scale-90 transition-all shadow-lg"><Send size={20}/></button>
-        <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyPress={e => e.key === 'Enter' && sendMessage()} placeholder="اكتب رسالتك لمدير البروتوكول..." className="flex-1 bg-white/5 border border-white/10 rounded-xl px-5 text-sm text-white outline-none focus:border-blue-500/40 transition-all shadow-inner" />
+        <button onClick={sendMessage} className="p-4 bg-blue-600 text-white rounded-xl active:scale-90 transition-all shadow-xl"><Send size={20}/></button>
+        <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyPress={e => e.key === 'Enter' && sendMessage()} placeholder="كيف يمكننا خدمتك اليوم؟" className="flex-1 bg-white/5 border border-white/10 rounded-xl px-5 text-sm text-white outline-none focus:border-blue-500/40 transition-all shadow-inner" />
       </div>
     </div>
   );
