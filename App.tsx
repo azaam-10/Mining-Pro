@@ -127,11 +127,15 @@ const App: React.FC = () => {
 
   const showToast = (message: any, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now();
-    // تحويل الكائن إلى نص لمنع ظهور [object Object]
-    const finalMessage = typeof message === 'object' ? (message?.message || JSON.stringify(message)) : String(message);
+    let finalMessage = "";
     
+    if (typeof message === 'object') {
+      finalMessage = message?.message || message?.error_description || JSON.stringify(message);
+    } else {
+      finalMessage = String(message);
+    }
+
     setToasts(prev => [...prev, { message: finalMessage, type, id }]);
-    // تصحيح الخطأ: استخدام setToasts بدلاً من toasts مباشرة
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   };
 
@@ -161,7 +165,7 @@ const App: React.FC = () => {
       showToast(lang === 'ar' ? "تم تفعيل العقد بنجاح" : "Contract activated successfully", 'success');
       await fetchAllUserData(session.user.id, session.user.email || '');
     } catch (err: any) {
-      showToast(lang === 'ar' ? "حدث خطأ أثناء الشراء" : "Purchase error", 'error');
+      showToast(err, 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -211,7 +215,7 @@ const App: React.FC = () => {
       showToast(lang === 'ar' ? "تم استلام الأرباح وانقاص يوم من العقد" : "Profits claimed, one day deducted", 'success');
       await fetchAllUserData(session.user.id, session.user.email || '');
     } catch (err: any) {
-      showToast(lang === 'ar' ? "خطأ في الاتصال بالبروتوكول" : "Protocol connection error", 'error');
+      showToast(err, 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -246,7 +250,7 @@ const App: React.FC = () => {
 
       {showInfo && <InfoModal lang={lang} onClose={() => setShowInfo(false)} />}
       {showRecharge && <RechargeModal lang={lang} t={t} onClose={() => setShowRecharge(false)} onDeposit={() => fetchAllUserData(session.user.id, session.user.email || '')} showToast={showToast} userId={session.user.id} setIsProcessing={setIsProcessing} isProcessing={isProcessing} />}
-      {showWithdraw && <WithdrawModal lang={lang} t={t} onClose={() => setShowWithdraw(false)} onWithdraw={() => fetchAllUserData(session.user.id, session.user.email || '')} max={userData.withdrawableBalance} userId={session.user.id} balance={userData.balance} showToast={showToast} setIsProcessing={setIsProcessing} isProcessing={isProcessing} user={userData} />}
+      {showWithdraw && <WithdrawModal lang={lang} t={t} onClose={() => setShowWithdraw(false)} onWithdraw={() => fetchAllUserData(session.user.id, session.user.email || '')} userData={userData} userId={session.user.id} showToast={showToast} setIsProcessing={setIsProcessing} isProcessing={isProcessing} />}
       {showSupport && <SupportChatModal lang={lang} t={t} onClose={() => setShowSupport(false)} userId={session.user.id} />}
       
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-full max-w-[85%] space-y-2 pointer-events-none">
@@ -1041,13 +1045,14 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId, setIsProcessi
         type: 'deposit', 
         amount: Number(amount), 
         status: 'pending', 
-        proof_url: image 
+        proof_url: image,
+        date: new Date().toISOString()
       });
       showToast(t('verificationPending'), 'success');
       onDeposit();
       onClose();
-    } catch (e) {
-      showToast(lang === 'ar' ? "خطأ في الاتصال بالبروتوكول" : "Connection error", "error");
+    } catch (e: any) {
+      showToast(e, "error");
     } finally {
       setInternalLoading(false);
       setIsProcessing(false);
@@ -1123,7 +1128,7 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId, setIsProcessi
   );
 };
 
-const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast, setIsProcessing, isProcessing, user, lang }: any) => {
+const WithdrawModal = ({ t, onClose, onWithdraw, userData, userId, showToast, setIsProcessing, isProcessing, lang }: any) => {
   const [amount, setAmount] = useState('');
   const [address, setAddress] = useState('');
   const [internalLoading, setInternalLoading] = useState(false);
@@ -1132,8 +1137,9 @@ const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast
   const submit = async () => {
     if (internalLoading || isProcessing) return;
     
-    if (user.lastWithdrawDate) {
-      const lastDate = new Date(user.lastWithdrawDate).toDateString();
+    // Validate daily limit
+    if (userData.lastWithdrawDate) {
+      const lastDate = new Date(userData.lastWithdrawDate).toDateString();
       const today = new Date().toDateString();
       if (lastDate === today) {
         return showToast(lang === 'ar' ? "عذراً، يسمح بعملية سحب واحدة فقط كل 24 ساعة" : "One withdrawal per 24h allowed", "error");
@@ -1141,9 +1147,17 @@ const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast
     }
 
     const amt = Number(amount);
-    if (amt < MIN_WITHDRAWAL) return showToast(lang === 'ar' ? `الحد الأدنى للسحب هو ${MIN_WITHDRAWAL} USDT` : `Min withdrawal is ${MIN_WITHDRAWAL}`, 'error');
-    if (amt > max) return showToast(lang === 'ar' ? "عذراً، رصيدك المتاح للسحب غير كافٍ" : "Insufficient withdrawable balance", "error");
-    if (!address.trim()) return showToast(lang === 'ar' ? "يرجى إدخال عنوان المحفظة بشكل صحيح" : "Enter valid address", "error");
+    if (isNaN(amt) || amt < MIN_WITHDRAWAL) {
+      return showToast(lang === 'ar' ? `الحد الأدنى للسحب هو ${MIN_WITHDRAWAL} USDT` : `Min withdrawal is ${MIN_WITHDRAWAL}`, 'error');
+    }
+    
+    if (amt > userData.withdrawableBalance) {
+      return showToast(lang === 'ar' ? "عذراً، رصيدك المتاح للسحب غير كافٍ" : "Insufficient withdrawable balance", "error");
+    }
+    
+    if (!address.trim()) {
+      return showToast(lang === 'ar' ? "يرجى إدخال عنوان المحفظة بشكل صحيح" : "Enter valid address", "error");
+    }
     
     setInternalLoading(true);
     setIsProcessing(true);
@@ -1160,33 +1174,33 @@ const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast
     try {
       const nowISO = new Date().toISOString();
       
-      // Update the user balance in profiles table immediately
+      // 1. Update Profile Balance immediately to avoid double spend
       const { error: profileError } = await supabase.from('profiles').update({ 
-        balance: balance - amt, 
-        withdrawable_balance: max - amt,
+        balance: Number(userData.balance) - amt, 
+        withdrawable_balance: Number(userData.withdrawableBalance) - amt,
         last_withdraw_date: nowISO
       }).eq('id', userId);
 
       if (profileError) throw profileError;
 
-      // Log the transaction
+      // 2. Insert Transaction for Admin Approval
       const { error: txError } = await supabase.from('transactions').insert({ 
         user_id: userId, 
         type: 'withdrawal', 
         amount: -amt, 
         status: 'pending', 
-        details: `Address: ${address}`,
+        details: `Wallet: ${address}`,
         date: nowISO
       });
 
       if (txError) throw txError;
       
-      onWithdraw(); 
+      onWithdraw(); // Triggers re-fetch in parent App
       onClose(); 
       showToast(lang === 'ar' ? "تم إرسال طلب تسييل الأصول بنجاح" : "Withdrawal request submitted", 'success');
     } catch (e: any) {
-      console.error(e);
-      showToast(lang === 'ar' ? "فشل في معالجة طلب السحب" : "Withdrawal error", "error");
+      console.error("Withdraw Error:", e);
+      showToast(e, "error");
     } finally {
       setInternalLoading(false);
       setIsProcessing(false);
@@ -1220,7 +1234,7 @@ const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast
         
         <div className={`bg-red-600/5 p-5 rounded-2xl flex justify-between items-center ${lang === 'ar' ? 'flex-row-reverse' : 'flex-row'} border border-red-500/10 shadow-inner`}>
            <span className="text-[9px] font-black text-slate-500 uppercase">{lang === 'ar' ? 'متاح للتسييل' : 'Withdrawable'}</span>
-           <span className="text-2xl font-black text-red-500 italic tracking-tighter">{max.toFixed(2)} USDT</span>
+           <span className="text-2xl font-black text-red-500 italic tracking-tighter">{Number(userData.withdrawableBalance).toFixed(2)} USDT</span>
         </div>
 
         <div className={`bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl flex gap-3 items-start ${lang === 'ar' ? 'flex-row-reverse text-right' : 'flex-row text-left'}`}>
