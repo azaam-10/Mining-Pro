@@ -9,13 +9,14 @@ export interface Machine {
   duration: number; // in days
 }
 
+// Updated to match Supabase database column naming (snake_case)
 export interface UserMachine {
   id: number;
-  machineId: number;
-  purchaseDate: string;
-  lastClaimDate: string | null;
-  totalEarned: number;
-  remainingDays: number;
+  machine_id: number;
+  purchase_date: string;
+  last_claim_date: string | null;
+  total_earned: number;
+  remaining_days: number;
 }
 
 export interface Transaction {
