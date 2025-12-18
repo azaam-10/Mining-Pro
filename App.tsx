@@ -8,7 +8,7 @@ import {
   ArrowDown, Zap, Globe, Layers, Settings, Eye, Search, 
   RefreshCw, Calendar, ChevronLeft, MessageCircle, Send, Sparkles,
   LogOut, Mail, Key, ShieldAlert, Award, TrendingUp, Gem, ChevronRight, AlertTriangle, ExternalLink,
-  Lock, Shield, Check, Activity, Info, Briefcase, History, Crown, Star, Flame
+  Lock, Shield, Check, Activity, Info, Briefcase, History, Crown, Star, Flame, Diamond, ZapOff
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL } from './constants';
@@ -362,81 +362,111 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, syncing
 
 const MachinesView = ({ user, onBuy, t, isProcessing }: any) => {
   const getTierInfo = (price: number) => {
-    if (price >= 100000) return { icon: Star, tier: 'DIAMOND SUPREME', class: 'tier-glow-diamond animate-float', badge: 'LEGENDARY', iconColor: 'text-rose-400' };
-    if (price >= 20000) return { icon: Flame, tier: 'PLATINUM NEBULA', class: 'tier-glow-platinum', badge: 'EXCLUSIVE', iconColor: 'text-orange-400' };
-    if (price >= 1000) return { icon: Crown, tier: 'GOLDEN QUANTUM', class: 'tier-glow-gold', badge: 'PREMIUM', iconColor: 'text-purple-400' };
-    return { icon: Gem, tier: 'CORE NODE', class: '', badge: 'ACTIVE', iconColor: 'text-blue-400' };
+    // التصنيف البصري بناءً على السعر لزيادة الإغراء
+    if (price >= 200000) return { icon: Diamond, tier: 'GALACTIC OVERLORD', class: 'tier-diamond-fx animate-float shimmer-effect', badge: 'GOD-TIER', iconColor: 'text-rose-400' };
+    if (price >= 50000) return { icon: Star, tier: 'DIAMOND SUPREME', class: 'tier-diamond-fx shimmer-effect', badge: 'LEGENDARY', iconColor: 'text-rose-300' };
+    if (price >= 10000) return { icon: Flame, tier: 'PLATINUM NEBULA', class: 'tier-platinum-fx shimmer-effect', badge: 'EXCLUSIVE', iconColor: 'text-orange-400' };
+    if (price >= 1000) return { icon: Crown, tier: 'GOLDEN QUANTUM', class: 'tier-gold-fx', badge: 'PREMIUM', iconColor: 'text-purple-400' };
+    if (price >= 100) return { icon: Gem, tier: 'SILVER TITAN', class: 'border-emerald-500/20 bg-emerald-500/5', badge: 'ADVANCED', iconColor: 'text-emerald-400' };
+    return { icon: Zap, tier: 'CORE NODE', class: 'border-blue-500/20 bg-blue-500/5', badge: 'ENTRY', iconColor: 'text-blue-400' };
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center flex-row-reverse px-1">
-        <h2 className="text-xl font-black italic uppercase text-white flex items-center gap-3 flex-row-reverse"><Layers className="text-blue-500" size={24}/> {t('machines')}</h2>
-        <div className="px-3 py-1 bg-blue-600/10 rounded-full border border-blue-500/20 flex items-center gap-1.5">
-           <Sparkles size={12} className="text-blue-500" />
-           <span className="text-[9px] font-black uppercase text-blue-500">Live Mining Network</span>
+    <div className="space-y-8 animate-in fade-in duration-700">
+      <div className="flex justify-between items-center flex-row-reverse px-2">
+        <h2 className="text-2xl font-black italic uppercase text-white flex items-center gap-3 flex-row-reverse">
+          <Layers className="text-blue-500" size={28}/> 
+          بروتوكول التعدين
+        </h2>
+        <div className="px-4 py-1.5 bg-blue-600/10 rounded-full border border-blue-500/30 flex items-center gap-2 shadow-[0_0_15px_rgba(37,99,235,0.2)]">
+           <Activity size={14} className="text-blue-500 animate-pulse" />
+           <span className="text-[10px] font-black uppercase text-blue-500 tracking-wider">Network Peak Efficiency</span>
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-6">
+
+      <div className="grid grid-cols-1 gap-8 pb-10">
         {MACHINES.map((m: any) => {
           const owned = user.ownedMachines.some((om: any) => om.machine_id === m.id);
           const tier = getTierInfo(m.price);
           const TierIcon = tier.icon;
           
           return (
-            <div key={m.id} className={`relative bg-[#0b0f1a] rounded-[2rem] p-5 shadow-2xl transition-all duration-500 border border-white/5 ${tier.class} group hover:scale-[1.02]`}>
-              {/* Badge */}
-              <div className="absolute top-4 left-4 z-20">
-                <span className={`px-3 py-1 rounded-full text-[7px] font-black uppercase tracking-widest border border-white/10 bg-black/40 ${tier.iconColor}`}>
-                  {tier.badge}
-                </span>
-              </div>
+            <div key={m.id} className={`relative rounded-[2.5rem] p-7 transition-all duration-700 border shadow-2xl group ${tier.class} hover:scale-[1.03] active:scale-[1.01]`}>
+              {/* Top Bar Decoration */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/3 h-1 bg-white/10 rounded-b-full"></div>
 
-              <div className="flex justify-between items-center flex-row-reverse mb-6 relative z-10">
-                   <div className="flex gap-4 flex-row-reverse items-center">
-                      <div className={`w-14 h-14 bg-gradient-to-br ${m.color} rounded-2xl flex items-center justify-center border border-white/10 shadow-2xl group-hover:rotate-12 transition-transform`}>
-                        <TierIcon size={28} className="text-white" />
-                      </div>
-                      <div className="text-right">
-                         <h3 className="font-black text-base text-white uppercase italic leading-none">{m.name}</h3>
-                         <p className={`text-[8px] font-bold mt-1.5 tracking-widest uppercase ${tier.iconColor}`}>{tier.tier}</p>
-                      </div>
-                   </div>
-                   <div className="text-left">
-                      <p className="text-3xl font-black text-white leading-none tracking-tighter">{m.price}</p>
-                      <p className="text-[8px] text-white/30 font-black uppercase mt-1.5 italic leading-none tracking-widest">Stake USDT</p>
-                   </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 mb-6 relative z-10">
-                <div className="bg-white/5 p-4 rounded-2xl text-right border border-white/5 group-hover:bg-white/10 transition-colors">
-                  <p className="text-[8px] font-black uppercase text-slate-500 mb-1 tracking-widest">الربح اليومي</p>
-                  <p className="text-xl font-black text-emerald-500 italic">+{m.dailyProfit}</p>
-                </div>
-                <div className="bg-white/5 p-4 rounded-2xl text-right border border-white/5 group-hover:bg-white/10 transition-colors">
-                  <p className="text-[8px] font-black uppercase text-slate-500 mb-1 tracking-widest">إجمالي العائد</p>
-                  <p className="text-xl font-black text-white italic">{(m.dailyProfit * m.duration).toFixed(0)}</p>
+              {/* Status Badge */}
+              <div className="absolute -top-3 -right-3 z-30">
+                <div className={`px-4 py-1.5 rounded-2xl text-[8px] font-black uppercase tracking-[0.2em] border shadow-2xl ${owned ? 'bg-emerald-600 border-emerald-400 text-white animate-pulse' : 'bg-black/80 border-white/20 text-white/60'}`}>
+                  {owned ? 'ACTIVE DEPLOYMENT' : tier.badge}
                 </div>
               </div>
 
-              <button 
-                onClick={() => onBuy(m)} 
-                disabled={owned || isProcessing} 
-                className={`w-full py-4.5 rounded-2xl font-black text-[12px] uppercase tracking-widest transition-all shadow-xl active:scale-95 ${owned ? 'bg-slate-950 text-slate-700 border border-white/5' : 'bg-white text-black hover:bg-slate-100 disabled:opacity-50'}`}
-              >
-                {owned ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <ShieldCheck size={16} /> العقد قيد العمل
+              {/* Header: Icon and Price */}
+              <div className="flex justify-between items-start flex-row-reverse mb-8">
+                <div className="flex gap-5 flex-row-reverse items-center">
+                  <div className={`w-16 h-16 bg-gradient-to-br ${m.color} rounded-3xl flex items-center justify-center border border-white/20 shadow-[0_0_25px_rgba(255,255,255,0.1)] group-hover:rotate-6 transition-all duration-500`}>
+                    <TierIcon size={32} className="text-white drop-shadow-lg" />
                   </div>
-                ) : (
-                  <div className="flex items-center justify-center gap-2">
-                    <Zap size={16} className="fill-black" /> تفعيل العقد الفوري
+                  <div className="text-right">
+                    <h3 className="font-black text-lg text-white uppercase italic leading-none tracking-tight">{m.name}</h3>
+                    <p className={`text-[9px] font-black mt-2 tracking-[0.25em] uppercase neon-text ${tier.iconColor}`}>
+                      {tier.tier}
+                    </p>
                   </div>
+                </div>
+                <div className="text-left bg-black/40 px-4 py-3 rounded-2xl border border-white/5 shadow-inner">
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="text-3xl font-black text-white leading-none tracking-tighter">{m.price}</span>
+                    <span className="text-[10px] font-bold text-blue-500 uppercase">USDT</span>
+                  </div>
+                  <p className="text-[7px] text-white/30 font-black uppercase italic leading-none text-right">SECURE STAKE</p>
+                </div>
+              </div>
+
+              {/* Stats: ROI and Returns */}
+              <div className="grid grid-cols-2 gap-5 mb-8">
+                <div className="bg-black/30 backdrop-blur-md p-5 rounded-3xl text-right border border-white/5 relative overflow-hidden group-hover:border-emerald-500/20 transition-all">
+                  <p className="text-[8px] font-black uppercase text-slate-500 mb-2 tracking-widest">Daily Revenue</p>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <TrendingUp size={16} className="text-emerald-500" />
+                    <p className="text-2xl font-black text-emerald-500 italic neon-text leading-none">+{m.dailyProfit}</p>
+                  </div>
+                  <div className="absolute -bottom-2 -left-2 w-10 h-10 bg-emerald-500/10 blur-xl"></div>
+                </div>
+                <div className="bg-black/30 backdrop-blur-md p-5 rounded-3xl text-right border border-white/5 relative overflow-hidden group-hover:border-blue-500/20 transition-all">
+                  <p className="text-[8px] font-black uppercase text-slate-500 mb-2 tracking-widest">Protocol Cycle</p>
+                  <p className="text-2xl font-black text-white italic leading-none">{m.duration}<span className="text-xs text-white/40 ml-1">DAYS</span></p>
+                  <div className="absolute -bottom-2 -left-2 w-10 h-10 bg-blue-500/10 blur-xl"></div>
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <div className="relative pt-2">
+                <button 
+                  onClick={() => onBuy(m)} 
+                  disabled={owned || isProcessing} 
+                  className={`w-full py-5 rounded-2xl font-black text-[13px] uppercase tracking-[0.25em] transition-all shadow-2xl active:scale-95 flex items-center justify-center gap-3 ${owned ? 'bg-slate-900/80 text-slate-600 border border-white/5 cursor-default' : 'bg-white text-black hover:bg-blue-50 hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]'}`}
+                >
+                  {owned ? (
+                    <>
+                      <Lock size={18} />
+                      DEPLOYED
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={18} className="fill-current" />
+                      INITIATE PROTOCOL
+                    </>
+                  )}
+                </button>
+                {!owned && (
+                  <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-4/5 h-6 bg-blue-500/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 )}
-              </button>
+              </div>
 
-              {/* Decorative Glow */}
-              <div className={`absolute -bottom-10 -right-10 w-40 h-40 rounded-full blur-[100px] opacity-20 pointer-events-none bg-gradient-to-br ${m.color}`}></div>
+              {/* Background Ambient Glow */}
+              <div className={`absolute -bottom-20 -left-20 w-64 h-64 rounded-full blur-[120px] opacity-10 pointer-events-none bg-gradient-to-br ${m.color} group-hover:opacity-20 transition-all duration-700`}></div>
             </div>
           );
         })}

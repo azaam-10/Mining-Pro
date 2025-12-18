@@ -12,6 +12,7 @@
         font-family: 'Inter', sans-serif;
         background-color: #020617;
         color: #f8fafc;
+        overflow-x: hidden;
       }
       .rtl {
         font-family: 'Cairo', sans-serif;
@@ -24,24 +25,61 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
+      
+      /* Advanced Visual FX */
       @keyframes float {
-        0%, 100% { transform: translateY(0px); }
-        50% { transform: translateY(-10px); }
+        0%, 100% { transform: translateY(0px) rotate(0deg); }
+        50% { transform: translateY(-15px) rotate(1deg); }
       }
+      
+      @keyframes pulse-glow {
+        0%, 100% { opacity: 0.5; filter: brightness(1); }
+        50% { opacity: 1; filter: brightness(1.5); }
+      }
+
+      @keyframes scan {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(200%); }
+      }
+
       .animate-float {
-        animation: float 4s ease-in-out infinite;
+        animation: float 6s ease-in-out infinite;
       }
-      .tier-glow-diamond {
-        box-shadow: 0 0 30px rgba(244, 63, 94, 0.2);
-        border: 1px solid rgba(244, 63, 94, 0.3);
+
+      .tier-diamond-fx {
+        background: linear-gradient(135deg, rgba(244,63,94,0.1) 0%, rgba(2,6,23,0.8) 100%);
+        box-shadow: 0 0 50px rgba(244,63,94,0.25), inset 0 0 20px rgba(255,255,255,0.05);
+        border: 1px solid rgba(244,63,94,0.4) !important;
       }
-      .tier-glow-platinum {
-        box-shadow: 0 0 25px rgba(249, 115, 22, 0.15);
-        border: 1px solid rgba(249, 115, 22, 0.2);
+
+      .tier-platinum-fx {
+        background: linear-gradient(135deg, rgba(249,115,22,0.1) 0%, rgba(2,6,23,0.8) 100%);
+        box-shadow: 0 0 40px rgba(249,115,22,0.2), inset 0 0 15px rgba(255,255,255,0.05);
+        border: 1px solid rgba(249,115,22,0.3) !important;
       }
-      .tier-glow-gold {
-        box-shadow: 0 0 20px rgba(168, 85, 247, 0.15);
-        border: 1px solid rgba(168, 85, 247, 0.2);
+
+      .tier-gold-fx {
+        background: linear-gradient(135deg, rgba(168,85,247,0.08) 0%, rgba(2,6,23,0.8) 100%);
+        box-shadow: 0 0 30px rgba(168,85,247,0.15);
+        border: 1px solid rgba(168,85,247,0.25) !important;
+      }
+
+      .shimmer-effect {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .shimmer-effect::after {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; width: 50%; height: 100%;
+        background: linear-gradient(to right, transparent, rgba(255,255,255,0.1), transparent);
+        transform: skewX(-25deg);
+        animation: scan 4s infinite;
+      }
+
+      .neon-text {
+        text-shadow: 0 0 10px currentColor;
       }
     </style>
     <script type="importmap">
