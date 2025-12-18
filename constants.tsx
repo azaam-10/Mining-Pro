@@ -9,34 +9,46 @@ export const REFERRAL_PERCENT = 0.10;
 
 const generateMachines = (): Machine[] => {
   const machines: Machine[] = [];
-  const prices: number[] = [10, 20, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000];
+  const prices: number[] = [];
+
+  // من 10 إلى 100 بفرق 10
+  for (let i = 10; i <= 100; i += 10) prices.push(i);
+  // من 100 إلى 200 بفرق 25
+  for (let i = 125; i <= 200; i += 25) prices.push(i);
+  // من 200 إلى 500 بفرق 50
+  for (let i = 250; i <= 500; i += 50) prices.push(i);
+  // من 500 إلى 1000 بفرق 100
+  for (let i = 600; i <= 1000; i += 100) prices.push(i);
+  // من 1000 إلى 10000 بفرق 1000
+  for (let i = 2000; i <= 10000; i += 1000) prices.push(i);
+  // من 10000 إلى 100000 بفرق 10000
+  for (let i = 20000; i <= 100000; i += 10000) prices.push(i);
+  // من 100000 إلى 1000000 بفرق 100000
+  for (let i = 200000; i <= 1000000; i += 100000) prices.push(i);
 
   prices.forEach((price, index) => {
-    // نسبة الربح تزداد بشكل مغري مع زيادة السعر
-    const dailyRate = 0.10 + (index * 0.008); 
+    // نسبة الربح تزداد بشكل مغري مع زيادة السعر لجذب المستثمرين
+    const dailyRate = 0.08 + (Math.log10(price) * 0.015); 
     const dailyProfit = Number((price * dailyRate).toFixed(2));
-    const duration = 20; // دورة عمل ثابتة ومغرية (200% ربح في 20 يوم)
+    const duration = 20; 
 
     let name = "";
-    let desc = "";
-    if (price <= 50) {
-      name = `CORE-NODE V1`;
-      desc = "مثالية للمبتدئين لبدء رحلة التعدين الرقمي";
-    } else if (price <= 500) {
-      name = `ALPHA-STREAM X`;
-      desc = "قوة معالجة مضاعفة مع استقرار عالي في الأرباح";
-    } else if (price <= 5000) {
-      name = `TITAN-RACK PRO`;
-      desc = "خوادم احترافية مخصصة لكبار المستثمرين";
-    } else if (price <= 50000) {
-      name = `QUANTUM OVERLORD`;
-      desc = "تقنية الكوانتوم لتوليد أقصى عائد ممكن يومياً";
-    } else if (price <= 250000) {
-      name = `NEBULA SUPERIOR`;
-      desc = "تحكم كامل في شبكة التعدين العالمية بعوائد ضخمة";
+    let color = "";
+    if (price <= 100) {
+      name = `BASIC CORE v${index + 1}`;
+      color = "from-blue-500 to-cyan-500";
+    } else if (price <= 1000) {
+      name = `TITAN STREAM x${index}`;
+      color = "from-emerald-500 to-teal-500";
+    } else if (price <= 10000) {
+      name = `QUANTUM FORCE`;
+      color = "from-purple-600 to-pink-600";
+    } else if (price <= 100000) {
+      name = `NEBULA OVERLORD`;
+      color = "from-amber-500 to-orange-600";
     } else {
       name = `SUPREME OMNI-GOD`;
-      desc = "قمة الهرم الاستثماري - سيطرة كاملة على البروتوكول";
+      color = "from-rose-600 to-red-800";
     }
 
     machines.push({
@@ -45,7 +57,8 @@ const generateMachines = (): Machine[] => {
       price: price,
       dailyProfit: dailyProfit,
       duration: duration,
-      description: desc // أضفنا الوصف للإغراء
+      description: "نظام التعدين الموزع عالي الكثافة",
+      color: color // خاصية لونية للتصميم المغري
     } as any);
   });
 
@@ -61,18 +74,18 @@ export const TRANSLATIONS: Translations = {
   team: { en: "Team", ar: "الفريق" },
   profile: { en: "Profile", ar: "الملف" },
   adminTool: { en: "Admin", ar: "المسؤول" },
-  balanceTitle: { en: "Available Balance", ar: "الرصيد المتاح" },
-  recharge: { en: "Recharge", ar: "إيداع" },
+  balanceTitle: { en: "Total Assets", ar: "إجمالي الأصول" },
+  recharge: { en: "Deposit", ar: "إيداع" },
   withdraw: { en: "Withdraw", ar: "سحب" },
-  history: { en: "History", ar: "السجل" },
+  history: { en: "Ledger", ar: "السجل" },
   buyNow: { en: "Buy Now", ar: "شراء الآن" },
-  owned: { en: "Active", ar: "نشط" },
-  completeTask: { en: "Claim Profit", ar: "استلام الربح" },
+  owned: { en: "Running", ar: "نشط" },
+  completeTask: { en: "Claim", ar: "استلام" },
   supportChat: { en: "Support", ar: "الدعم الفني" },
-  typeMessage: { en: "Type here...", ar: "اكتب رسالتك..." },
-  confirmDeposit: { en: "Confirm", ar: "تأكيد" },
-  clickToUpload: { en: "Upload Proof", ar: "رفع الإثبات" },
+  typeMessage: { en: "Type...", ar: "اكتب رسالتك..." },
+  confirmDeposit: { en: "Verify", ar: "تأكيد" },
+  clickToUpload: { en: "Attach Proof", ar: "رفع الإثبات" },
   minWithdrawalError: { en: "Min 8 USDT", ar: "أقل سحب 8 عملات" },
-  verificationPending: { en: "Pending...", ar: "قيد المراجعة..." },
-  transactionCompleted: { en: "Success", ar: "تم بنجاح" }
+  verificationPending: { en: "Verifying...", ar: "قيد المراجعة..." },
+  transactionCompleted: { en: "Confirmed", ar: "تم بنجاح" }
 };
