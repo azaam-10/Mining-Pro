@@ -24,6 +24,25 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
+      @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+      }
+      .animate-float {
+        animation: float 4s ease-in-out infinite;
+      }
+      .tier-glow-diamond {
+        box-shadow: 0 0 30px rgba(244, 63, 94, 0.2);
+        border: 1px solid rgba(244, 63, 94, 0.3);
+      }
+      .tier-glow-platinum {
+        box-shadow: 0 0 25px rgba(249, 115, 22, 0.15);
+        border: 1px solid rgba(249, 115, 22, 0.2);
+      }
+      .tier-glow-gold {
+        box-shadow: 0 0 20px rgba(168, 85, 247, 0.15);
+        border: 1px solid rgba(168, 85, 247, 0.2);
+      }
     </style>
     <script type="importmap">
     {

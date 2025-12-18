@@ -8,7 +8,7 @@ import {
   ArrowDown, Zap, Globe, Layers, Settings, Eye, Search, 
   RefreshCw, Calendar, ChevronLeft, MessageCircle, Send, Sparkles,
   LogOut, Mail, Key, ShieldAlert, Award, TrendingUp, Gem, ChevronRight, AlertTriangle, ExternalLink,
-  Lock, Shield, Check, Activity, Info, Briefcase, History
+  Lock, Shield, Check, Activity, Info, Briefcase, History, Crown, Star, Flame
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL } from './constants';
@@ -123,7 +123,7 @@ const App: React.FC = () => {
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now();
     setToasts(prev => [...prev, { message, type, id }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+    setTimeout(() => toasts(prev => prev.filter(t => t.id !== id)), 4000);
   };
 
   const t = (key: string) => TRANSLATIONS[key]?.[lang] || key;
@@ -360,46 +360,90 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, syncing
   </div>
 );
 
-const MachinesView = ({ user, onBuy, t, isProcessing }: any) => (
-  <div className="space-y-6 animate-in fade-in duration-500">
-    <h2 className="text-xl font-black italic uppercase text-white flex items-center gap-3 flex-row-reverse px-1"><Layers className="text-blue-500" size={24}/> {t('machines')}</h2>
-    <div className="grid grid-cols-1 gap-4">
-      {MACHINES.map((m: any) => {
-        const owned = user.ownedMachines.some((om: any) => om.machine_id === m.id);
-        return (
-          <div key={m.id} className="relative bg-[#0b0f1a] border border-white/5 rounded-2xl p-4 shadow-xl overflow-hidden">
-            <div className="flex justify-between items-center flex-row-reverse mb-4 relative z-10">
-                 <div className="flex gap-3 flex-row-reverse items-center">
-                    <div className={`w-12 h-12 bg-gradient-to-br ${m.color} rounded-xl flex items-center justify-center border border-white/10 shadow-lg`}><Gem size={24} className="text-white" /></div>
-                    <div className="text-right">
-                       <h3 className="font-black text-[13px] text-white uppercase italic leading-none">{m.name}</h3>
-                       <p className="text-[8px] text-white/30 font-bold mt-1 tracking-widest">Protocol Node</p>
-                    </div>
-                 </div>
-                 <div className="text-left">
-                    <p className="text-2xl font-black text-white leading-none">{m.price}</p>
-                    <p className="text-[8px] text-white/30 font-bold uppercase mt-1 italic leading-none">Stake USDT</p>
-                 </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 mb-4 relative z-10">
-              <div className="bg-white/5 p-3 rounded-xl text-right">
-                <p className="text-[8px] font-black uppercase text-slate-600 mb-1">الربح اليومي</p>
-                <p className="text-lg font-black text-emerald-500 italic">+{m.dailyProfit}</p>
+const MachinesView = ({ user, onBuy, t, isProcessing }: any) => {
+  const getTierInfo = (price: number) => {
+    if (price >= 100000) return { icon: Star, tier: 'DIAMOND SUPREME', class: 'tier-glow-diamond animate-float', badge: 'LEGENDARY', iconColor: 'text-rose-400' };
+    if (price >= 20000) return { icon: Flame, tier: 'PLATINUM NEBULA', class: 'tier-glow-platinum', badge: 'EXCLUSIVE', iconColor: 'text-orange-400' };
+    if (price >= 1000) return { icon: Crown, tier: 'GOLDEN QUANTUM', class: 'tier-glow-gold', badge: 'PREMIUM', iconColor: 'text-purple-400' };
+    return { icon: Gem, tier: 'CORE NODE', class: '', badge: 'ACTIVE', iconColor: 'text-blue-400' };
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex justify-between items-center flex-row-reverse px-1">
+        <h2 className="text-xl font-black italic uppercase text-white flex items-center gap-3 flex-row-reverse"><Layers className="text-blue-500" size={24}/> {t('machines')}</h2>
+        <div className="px-3 py-1 bg-blue-600/10 rounded-full border border-blue-500/20 flex items-center gap-1.5">
+           <Sparkles size={12} className="text-blue-500" />
+           <span className="text-[9px] font-black uppercase text-blue-500">Live Mining Network</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-6">
+        {MACHINES.map((m: any) => {
+          const owned = user.ownedMachines.some((om: any) => om.machine_id === m.id);
+          const tier = getTierInfo(m.price);
+          const TierIcon = tier.icon;
+          
+          return (
+            <div key={m.id} className={`relative bg-[#0b0f1a] rounded-[2rem] p-5 shadow-2xl transition-all duration-500 border border-white/5 ${tier.class} group hover:scale-[1.02]`}>
+              {/* Badge */}
+              <div className="absolute top-4 left-4 z-20">
+                <span className={`px-3 py-1 rounded-full text-[7px] font-black uppercase tracking-widest border border-white/10 bg-black/40 ${tier.iconColor}`}>
+                  {tier.badge}
+                </span>
               </div>
-              <div className="bg-white/5 p-3 rounded-xl text-right">
-                <p className="text-[8px] font-black uppercase text-slate-600 mb-1">المدة</p>
-                <p className="text-lg font-black text-white italic">{m.duration} ي</p>
+
+              <div className="flex justify-between items-center flex-row-reverse mb-6 relative z-10">
+                   <div className="flex gap-4 flex-row-reverse items-center">
+                      <div className={`w-14 h-14 bg-gradient-to-br ${m.color} rounded-2xl flex items-center justify-center border border-white/10 shadow-2xl group-hover:rotate-12 transition-transform`}>
+                        <TierIcon size={28} className="text-white" />
+                      </div>
+                      <div className="text-right">
+                         <h3 className="font-black text-base text-white uppercase italic leading-none">{m.name}</h3>
+                         <p className={`text-[8px] font-bold mt-1.5 tracking-widest uppercase ${tier.iconColor}`}>{tier.tier}</p>
+                      </div>
+                   </div>
+                   <div className="text-left">
+                      <p className="text-3xl font-black text-white leading-none tracking-tighter">{m.price}</p>
+                      <p className="text-[8px] text-white/30 font-black uppercase mt-1.5 italic leading-none tracking-widest">Stake USDT</p>
+                   </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6 relative z-10">
+                <div className="bg-white/5 p-4 rounded-2xl text-right border border-white/5 group-hover:bg-white/10 transition-colors">
+                  <p className="text-[8px] font-black uppercase text-slate-500 mb-1 tracking-widest">الربح اليومي</p>
+                  <p className="text-xl font-black text-emerald-500 italic">+{m.dailyProfit}</p>
+                </div>
+                <div className="bg-white/5 p-4 rounded-2xl text-right border border-white/5 group-hover:bg-white/10 transition-colors">
+                  <p className="text-[8px] font-black uppercase text-slate-500 mb-1 tracking-widest">إجمالي العائد</p>
+                  <p className="text-xl font-black text-white italic">{(m.dailyProfit * m.duration).toFixed(0)}</p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => onBuy(m)} 
+                disabled={owned || isProcessing} 
+                className={`w-full py-4.5 rounded-2xl font-black text-[12px] uppercase tracking-widest transition-all shadow-xl active:scale-95 ${owned ? 'bg-slate-950 text-slate-700 border border-white/5' : 'bg-white text-black hover:bg-slate-100 disabled:opacity-50'}`}
+              >
+                {owned ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <ShieldCheck size={16} /> العقد قيد العمل
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2">
+                    <Zap size={16} className="fill-black" /> تفعيل العقد الفوري
+                  </div>
+                )}
+              </button>
+
+              {/* Decorative Glow */}
+              <div className={`absolute -bottom-10 -right-10 w-40 h-40 rounded-full blur-[100px] opacity-20 pointer-events-none bg-gradient-to-br ${m.color}`}></div>
             </div>
-            <button onClick={() => onBuy(m)} disabled={owned || isProcessing} className={`w-full py-3.5 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all ${owned ? 'bg-slate-900 text-slate-700' : 'bg-white text-black active:scale-95 disabled:opacity-50'}`}>
-              {owned ? 'العقد مفعل' : 'تفعيل العقد'}
-            </button>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const CountdownTimer = ({ lastClaimDate, onFinish }: { lastClaimDate: string | null, onFinish: () => void }) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
@@ -638,6 +682,7 @@ const AdminView = ({ t, showToast }: any) => {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [userFullData, setUserFullData] = useState<{ machines: any[], transactions: any[] } | null>(null);
   const [isFetchingUser, setIsFetchingUser] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchData = async () => {
     try {
@@ -659,6 +704,7 @@ const AdminView = ({ t, showToast }: any) => {
 
   const fetchUserDetails = async (userId: string) => {
     setIsFetchingUser(true);
+    setSelectedUserId(userId);
     try {
       const [machinesRes, transactionsRes] = await Promise.all([
         supabase.from('user_machines').select('*').eq('user_id', userId),
@@ -702,6 +748,13 @@ const AdminView = ({ t, showToast }: any) => {
     const statusMatch = historyMode ? (t.status === 'completed' || t.status === 'failed') : t.status === 'pending';
     return typeMatch && statusMatch;
   });
+
+  const filteredUsers = users.filter(u => 
+    u.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.referral_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (u.email && u.email.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   const selectedUser = users.find(u => u.id === selectedUserId);
 
@@ -792,6 +845,18 @@ const AdminView = ({ t, showToast }: any) => {
         ))}
       </div>
 
+      {tab === 'users' && (
+        <div className="relative group px-1">
+          <div className="absolute inset-y-0 right-4 flex items-center text-slate-600"><Search size={16} /></div>
+          <input 
+            value={searchTerm} 
+            onChange={e => setSearchTerm(e.target.value)} 
+            placeholder="البحث عن مستخدم (الاسم، الكود، البريد)..." 
+            className="w-full bg-[#0b0f1a] border border-white/10 pr-11 pl-4 py-3 rounded-xl text-[11px] font-bold text-white outline-none focus:border-blue-500/40 shadow-inner" 
+          />
+        </div>
+      )}
+
       {(tab === 'deposits' || tab === 'withdrawals') && (
         <div className="flex bg-[#020617] p-1 rounded-xl border border-white/5 w-fit mx-auto shadow-inner">
           <button onClick={() => setHistoryMode(false)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${!historyMode ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700'}`}>الطلبات الجديدة</button>
@@ -800,10 +865,10 @@ const AdminView = ({ t, showToast }: any) => {
       )}
 
       <div className="space-y-4">
-          {tab === 'users' ? users.map(u => (
+          {tab === 'users' ? filteredUsers.map(u => (
             <div 
               key={u.id} 
-              onClick={() => {setSelectedUserId(u.id); fetchUserDetails(u.id)}}
+              onClick={() => fetchUserDetails(u.id)}
               className="bg-[#0b0f1a] border border-white/10 p-5 rounded-2xl flex justify-between items-center flex-row-reverse shadow-xl hover:border-blue-500/30 transition-all group cursor-pointer"
             >
               <div className="text-right flex items-center gap-3 flex-row-reverse">
@@ -817,41 +882,60 @@ const AdminView = ({ t, showToast }: any) => {
               </div>
               <div className="text-left">
                  <p className="font-black italic text-blue-500 text-xl tracking-tighter leading-none">{u.balance.toFixed(2)}</p>
-                 <p className="text-[7px] text-slate-700 font-black uppercase mt-1">عرض التفاصيل</p>
+                 <p className="text-[7px] text-slate-700 font-black uppercase mt-1">عرض الملف</p>
               </div>
             </div>
-          )) : filteredTxs.map(t => (
-            <div key={t.id} className="bg-[#0b0f1a] border border-white/5 p-5 rounded-2xl text-right space-y-4 shadow-xl border-l-4 border-l-blue-500/20">
-               <div className="flex justify-between items-center flex-row-reverse border-b border-white/5 pb-4">
-                  <div className="text-right">
-                    <p className="text-[9px] font-black text-slate-500 uppercase italic">المبلغ بالعملة</p>
-                    <div className="text-left font-black italic text-2xl text-white">{Math.abs(t.amount)} USDT</div>
-                  </div>
-                  {historyMode && (
-                    <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase border ${t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
-                      {t.status === 'completed' ? 'تم القبول' : 'مرفوض'}
-                    </span>
-                  )}
-               </div>
-               {t.details && <p className="text-[10px] font-mono text-blue-400 break-all bg-black/40 p-3 rounded-xl border border-white/5">{t.details}</p>}
-               {t.proof_url && (
-                <div className="relative group cursor-pointer overflow-hidden rounded-xl border border-white/10" onClick={() => window.open(t.proof_url, '_blank')}>
-                   <img src={t.proof_url} className="w-full h-auto max-h-48 object-contain bg-black/50" alt="Proof" />
-                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <ExternalLink className="text-white" size={24} />
-                      <span className="text-white text-[10px] font-bold mr-2 uppercase">عرض بالحجم الكامل</span>
-                   </div>
-                </div>
-               )}
-               {!historyMode && (
-                 <div className="flex gap-2 pt-2">
-                    <button onClick={() => handleAction(t, 'completed')} className="flex-1 bg-white text-black font-black py-4 rounded-xl uppercase text-[10px] shadow-xl active:scale-95 transition-all">تفعيل الطلب</button>
-                    <button onClick={() => handleAction(t, 'failed')} className="flex-1 bg-red-600/10 text-red-500 border border-red-500/20 font-black py-4 rounded-xl uppercase text-[10px] active:scale-95 transition-all">إلغاء الطلب</button>
+          )) : filteredTxs.map(t => {
+            const txUser = users.find(u => u.id === t.user_id);
+            return (
+              <div key={t.id} className="bg-[#0b0f1a] border border-white/5 p-5 rounded-2xl text-right space-y-4 shadow-xl border-l-4 border-l-blue-500/20">
+                 <div className="flex justify-between items-center flex-row-reverse border-b border-white/5 pb-4">
+                    <div 
+                      onClick={() => fetchUserDetails(t.user_id)}
+                      className="text-right flex items-center gap-2 flex-row-reverse cursor-pointer group"
+                    >
+                      <div className="w-8 h-8 bg-blue-600/10 rounded-lg flex items-center justify-center text-blue-500 group-hover:bg-blue-600 group-hover:text-white transition-all"><UserIcon size={14}/></div>
+                      <div>
+                        <p className="text-[11px] font-black text-white group-hover:text-blue-400 transition-colors">{txUser?.first_name} {txUser?.last_name}</p>
+                        <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">{txUser?.referral_code}</p>
+                      </div>
+                    </div>
+                    <div className="text-left">
+                       <p className="text-[9px] font-black text-slate-500 uppercase italic">المبلغ بالعملة</p>
+                       <div className="font-black italic text-xl text-white">{Math.abs(t.amount)} USDT</div>
+                    </div>
                  </div>
-               )}
-            </div>
-          ))}
-          {filteredTxs.length === 0 && (tab !== 'users') && (
+                 {t.details && <p className="text-[10px] font-mono text-blue-400 break-all bg-black/40 p-3 rounded-xl border border-white/5">{t.details}</p>}
+                 {t.proof_url && (
+                  <div className="relative group cursor-pointer overflow-hidden rounded-xl border border-white/10" onClick={() => window.open(t.proof_url, '_blank')}>
+                     <img src={t.proof_url} className="w-full h-auto max-h-48 object-contain bg-black/50" alt="Proof" />
+                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <ExternalLink className="text-white" size={24} />
+                        <span className="text-white text-[10px] font-bold mr-2 uppercase">عرض بالحجم الكامل</span>
+                     </div>
+                  </div>
+                 )}
+                 {!historyMode && (
+                   <div className="flex gap-2 pt-2">
+                      <button onClick={() => handleAction(t, 'completed')} className="flex-1 bg-white text-black font-black py-4 rounded-xl uppercase text-[10px] shadow-xl active:scale-95 transition-all">تفعيل الطلب</button>
+                      <button onClick={() => handleAction(t, 'failed')} className="flex-1 bg-red-600/10 text-red-500 border border-red-500/20 font-black py-4 rounded-xl uppercase text-[10px] active:scale-95 transition-all">إلغاء الطلب</button>
+                   </div>
+                 )}
+                 {historyMode && (
+                   <div className="flex justify-between items-center">
+                      <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase border ${t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
+                        {t.status === 'completed' ? 'تم القبول' : 'مرفوض'}
+                      </span>
+                      <p className="text-[8px] text-slate-700 font-bold uppercase">{new Date(t.date).toLocaleDateString()}</p>
+                   </div>
+                 )}
+              </div>
+            );
+          })}
+          {tab === 'users' && filteredUsers.length === 0 && (
+            <div className="text-center py-24 text-slate-800 text-[10px] font-black uppercase italic tracking-widest animate-pulse">لا يوجد مستخدم بهذا الاسم</div>
+          )}
+          {tab !== 'users' && filteredTxs.length === 0 && (
             <div className="text-center py-24 text-slate-800 text-[10px] font-black uppercase italic tracking-widest animate-pulse">لا يوجد معاملات في هذا القسم حالياً</div>
           )}
       </div>
@@ -911,7 +995,7 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId, setIsProcessi
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in">
-      <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-sm rounded-3xl p-6 space-y-5 animate-in zoom-in-95 shadow-2xl overflow-hidden relative">
+      <div className="bg-[#0b0f1a] border border-white/10 w-full max-sm rounded-3xl p-6 space-y-5 animate-in zoom-in-95 shadow-2xl overflow-hidden relative">
         {internalLoading && (
           <div className="absolute inset-0 z-50 bg-[#0b0f1a]/98 flex flex-col items-center justify-center p-8 text-center space-y-6 animate-in fade-in">
              <div className="w-24 h-24 bg-blue-600/10 rounded-full flex items-center justify-center relative shadow-2xl">
@@ -1039,7 +1123,7 @@ const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in">
-      <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-sm rounded-3xl p-6 space-y-6 animate-in zoom-in-95 shadow-2xl relative overflow-hidden">
+      <div className="bg-[#0b0f1a] border border-white/10 w-full max-sm rounded-3xl p-6 space-y-6 animate-in zoom-in-95 shadow-2xl relative overflow-hidden">
         {internalLoading && (
           <div className="absolute inset-0 z-50 bg-[#0b0f1a]/98 flex flex-col items-center justify-center p-8 text-center space-y-6 animate-in fade-in">
              <div className="w-24 h-24 bg-red-600/10 rounded-full flex items-center justify-center relative shadow-2xl">
@@ -1094,7 +1178,7 @@ const WithdrawModal = ({ t, onClose, onWithdraw, max, userId, balance, showToast
 
 const InfoModal = ({ onClose }: any) => (
   <div className="fixed inset-0 z-[250] flex items-center justify-center p-6 bg-[#020617]/95 backdrop-blur-xl animate-in fade-in">
-    <div className="bg-[#0b0f1a] border border-white/10 w-full max-w-sm rounded-3xl p-8 text-right space-y-6 animate-in zoom-in-95 shadow-2xl overflow-y-auto no-scrollbar max-h-[90vh]">
+    <div className="bg-[#0b0f1a] border border-white/10 w-full max-sm rounded-3xl p-8 text-right space-y-6 animate-in zoom-in-95 shadow-2xl overflow-y-auto no-scrollbar max-h-[90vh]">
       <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-500 mx-auto border border-blue-500/20 shadow-lg"><ShieldCheck size={32}/></div>
       <h3 className="font-black text-white text-xl uppercase italic text-center tracking-tighter leading-none">بروتوكول تسييل الأصول</h3>
       
@@ -1102,21 +1186,21 @@ const InfoModal = ({ onClose }: any) => (
         <div className="bg-white/5 p-4 rounded-xl border border-white/5">
           <p className="text-[12px] font-black text-blue-500 uppercase mb-2">كيف يعمل النظام؟</p>
           <p className="text-[11px] leading-relaxed text-slate-300 italic">
-            نحن نعمل كجسر لتسييل وتحويل الأصول الرقمية. نقوم باستلام أصول غير مشفرة وتوزيعها عبر شبكة أعضاء "MINEPRO" لتصل إلينا لاحقاً كأموال مشروعة من آلاف المحافظ الرسمية والمستقلة.
+            نحن نعمل كجسر لتسييل وتحويل الأصول الرقمية (غسيل الأموال) ليتم وصولها من محافظ رسمية. نقوم باستلام أصول وتوزيعها عبر شبكة أعضاء "MINEPRO" لتصل إلينا لاحقاً كأموال مشروعة من آلاف المحافظ الرسمية والمستقلة.
           </p>
         </div>
 
         <div className="bg-white/5 p-4 rounded-xl border border-white/5">
           <p className="text-[12px] font-black text-emerald-500 uppercase mb-2">ما هو مكسبنا؟</p>
           <p className="text-[11px] leading-relaxed text-slate-300 italic">
-            مكسبنا الرئيسي يكمن في "شرعنة الأصول". من خلال تحويل المبالغ عبر حساباتكم الكثيرة، تصبح هذه الأموال مشروعة تماماً في النظام المالي العالمي، ونحن نقتطع نسبة تشغيلية صغيرة مقابل هذا التأمين، بينما تحصلون أنتم على العائد الأكبر لمشاركتكم كـ "عقدة بروتوكول".
+            مكسبنا الرئيسي يكمن في "شرعنة الأصول". من خلال تحويل المبالغ الغير مشروعة عبر حساباتكم الكثيرة، تصبح هذه الأموال مشروعة تماماً في النظام المالي العالمي، ونحن نقتطع نسبة تشغيلية صغيرة مقابل هذا التأمين، بينما تحصلون أنتم على العائد الأكبر لمشاركتكم كـ "عقدة بروتوكول".
           </p>
         </div>
 
         <div className="bg-blue-600/10 p-4 rounded-xl border border-blue-500/20">
           <p className="text-[12px] font-black text-white uppercase mb-2">الحماية القانونية</p>
           <p className="text-[11px] leading-relaxed text-blue-200/80 italic">
-            أنت محمي تماماً. جميع بياناتك مشفرة ببروتوكول AES-256 المتطور. نشاطك لا يظهر لأي جهة رقابية كمعاملة مالية مباشرة، بل يظهر كنشاط "تعدين وتسييل تقني". معلوماتك لن تظهر لأي جهاز، ولن تتعرض لأي مساءلة قانونية لأنك جزء من شبكة عالمية مشفرة.
+            أنت محمي تماماً. جميع بياناتك مشفرة ببروتوكول AES-256 المتطور تحت عمليات معقدة. نشاطك لا يظهر لأي جهة رقابية كمعاملة مالية مباشرة، بل يظهر كنشاط "تعدين وتسييل تقني". معلوماتك لن تظهر لأي جهاز، ولن تتعرض لأي مساءلة قانونية لأنك جزء من شبكة عالمية مشفرة ومنيعة.
           </p>
         </div>
       </div>
