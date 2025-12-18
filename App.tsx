@@ -127,15 +127,17 @@ const App: React.FC = () => {
 
   const showToast = (message: any, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now();
-    let finalMessage = "";
+    let finalMsg = "";
     
-    if (typeof message === 'object') {
-      finalMessage = message?.message || message?.error_description || JSON.stringify(message);
+    if (message instanceof Error) {
+      finalMsg = message.message;
+    } else if (typeof message === 'object') {
+      finalMsg = message.message || message.error_description || message.details || JSON.stringify(message);
     } else {
-      finalMessage = String(message);
+      finalMsg = String(message);
     }
 
-    setToasts(prev => [...prev, { message: finalMessage, type, id }]);
+    setToasts(prev => [...prev, { message: finalMsg, type, id }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   };
 
@@ -159,7 +161,7 @@ const App: React.FC = () => {
       if (machineErr) throw machineErr;
 
       await supabase.from('profiles')
-        .update({ balance: userData.balance - machine.price })
+        .update({ balance: Number(userData.balance) - machine.price })
         .eq('id', session.user.id);
 
       showToast(lang === 'ar' ? "تم تفعيل العقد بنجاح" : "Contract activated successfully", 'success');
@@ -200,8 +202,8 @@ const App: React.FC = () => {
       }).eq('id', um.id);
 
       await supabase.from('profiles').update({ 
-        balance: userData.balance + machine.dailyProfit, 
-        withdrawable_balance: userData.withdrawableBalance + machine.dailyProfit 
+        balance: Number(userData.balance) + machine.dailyProfit, 
+        withdrawable_balance: Number(userData.withdrawableBalance) + machine.dailyProfit 
       }).eq('id', session.user.id);
 
       await supabase.from('transactions').insert({ 
@@ -742,13 +744,22 @@ const AdminView = ({ t, showToast, lang }: any) => {
       if (profilesRes.data) setUsers(profilesRes.data);
       if (txsRes.data) setTxs(txsRes.data);
     } catch (e) { 
-      showToast(lang === 'ar' ? "خطأ في جلب بيانات الإدارة" : "Admin fetch error", "error"); 
+      showToast(e, "error"); 
     } finally { 
       setLoading(false); 
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { 
+    fetchData(); 
+    // تفعيل خاصية التحديث الفوري للأدمن
+    const channel = supabase.channel('tx-updates')
+      .on('postgres_changes', { event: 'INSERT', table: 'transactions' }, () => fetchData())
+      .on('postgres_changes', { event: 'UPDATE', table: 'transactions' }, () => fetchData())
+      .subscribe();
+      
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const fetchUserDetails = async (userId: string) => {
     setIsFetchingUser(true);
@@ -763,7 +774,7 @@ const AdminView = ({ t, showToast, lang }: any) => {
         transactions: transactionsRes.data || []
       });
     } catch (e) {
-      showToast(lang === 'ar' ? "خطأ في جلب تفاصيل المستخدم" : "User detail fetch error", "error");
+      showToast(e, "error");
     } finally {
       setIsFetchingUser(false);
     }
@@ -774,35 +785,36 @@ const AdminView = ({ t, showToast, lang }: any) => {
     if (!user) return;
     
     try {
-      // Logic for Deposit completion
+      // 1. الإيداع: زيادة الرصيد عند القبول
       if (tx.type === 'deposit' && newStatus === 'completed') {
         await supabase.from('profiles').update({ 
-          balance: user.balance + tx.amount, 
-          total_recharge: (user.total_recharge || 0) + tx.amount 
+          balance: Number(user.balance) + Math.abs(tx.amount), 
+          total_recharge: Number(user.total_recharge || 0) + Math.abs(tx.amount) 
         }).eq('id', tx.user_id);
       }
       
-      // Logic for Withdrawal rejection (REFUND)
+      // 2. السحب: استرجاع الرصيد عند الرفض
       if (tx.type === 'withdrawal' && newStatus === 'failed') {
          await supabase.from('profiles').update({ 
-           balance: user.balance + Math.abs(tx.amount), 
-           withdrawable_balance: (user.withdrawable_balance || 0) + Math.abs(tx.amount) 
+           balance: Number(user.balance) + Math.abs(tx.amount), 
+           withdrawable_balance: Number(user.withdrawable_balance || 0) + Math.abs(tx.amount) 
          }).eq('id', tx.user_id);
       }
 
-      // Logic for Withdrawal completion (UPDATE TOTAL WITHDRAW)
+      // 3. السحب: زيادة إجمالي المسحوبات عند القبول
       if (tx.type === 'withdrawal' && newStatus === 'completed') {
         await supabase.from('profiles').update({
-          total_withdraw: (user.total_withdraw || 0) + Math.abs(tx.amount)
+          total_withdraw: Number(user.total_withdraw || 0) + Math.abs(tx.amount)
         }).eq('id', tx.user_id);
       }
 
-      await supabase.from('transactions').update({ status: newStatus }).eq('id', tx.id);
+      const { error } = await supabase.from('transactions').update({ status: newStatus }).eq('id', tx.id);
+      if (error) throw error;
+      
+      showToast(lang === 'ar' ? `تم تحديث المعاملة` : `Transaction updated`, 'success');
       fetchData();
-      if (selectedUserId === tx.user_id) fetchUserDetails(tx.user_id); 
-      showToast(lang === 'ar' ? `تم تحديث حالة المعاملة بنجاح` : `Transaction status updated`, 'success');
     } catch (e) {
-      showToast(lang === 'ar' ? "فشل تحديث المعاملة" : "Transaction update failed", "error");
+      showToast(e, "error");
     }
   };
 
@@ -817,8 +829,7 @@ const AdminView = ({ t, showToast, lang }: any) => {
   const filteredUsers = users.filter(u => 
     u.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.referral_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (u.email && u.email.toLowerCase().includes(searchTerm.toLowerCase()))
+    u.referral_code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const selectedUser = users.find(u => u.id === selectedUserId);
@@ -844,11 +855,11 @@ const AdminView = ({ t, showToast, lang }: any) => {
                   <div className="grid grid-cols-2 gap-3">
                      <div className={`bg-[#0b0f1a] p-4 rounded-2xl border border-white/5 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
                         <p className="text-[9px] font-black text-slate-500 uppercase">{lang === 'ar' ? 'الرصيد الكلي' : 'Total Balance'}</p>
-                        <p className="text-xl font-black text-white italic">{selectedUser.balance.toFixed(2)}</p>
+                        <p className="text-xl font-black text-white italic">{Number(selectedUser.balance).toFixed(2)}</p>
                      </div>
                      <div className={`bg-[#0b0f1a] p-4 rounded-2xl border border-white/5 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
                         <p className="text-[9px] font-black text-slate-500 uppercase">{lang === 'ar' ? 'قابل للسحب' : 'Withdrawable'}</p>
-                        <p className="text-xl font-black text-red-500 italic">{selectedUser.withdrawable_balance.toFixed(2)}</p>
+                        <p className="text-xl font-black text-red-500 italic">{Number(selectedUser.withdrawable_balance).toFixed(2)}</p>
                      </div>
                   </div>
 
@@ -866,7 +877,6 @@ const AdminView = ({ t, showToast, lang }: any) => {
                          </div>
                        );
                      })}
-                     {userFullData.machines.length === 0 && <p className="text-[10px] text-center text-slate-700 py-4 italic font-bold">{lang === 'ar' ? 'لا توجد عقود مفعلة' : 'No active contracts'}</p>}
                   </div>
 
                   <div className="space-y-3">
@@ -875,18 +885,12 @@ const AdminView = ({ t, showToast, lang }: any) => {
                        <div key={t.id} className="bg-[#0b0f1a] border border-white/5 p-4 rounded-xl space-y-3">
                           <div className={`flex justify-between items-center ${lang === 'ar' ? 'flex-row-reverse' : 'flex-row'}`}>
                              <div className={lang === 'ar' ? 'text-right' : 'text-left'}>
-                                <p className="text-[11px] font-black text-white uppercase italic">{t.type === 'deposit' ? (lang === 'ar' ? 'إيداع' : 'Deposit') : t.type === 'withdrawal' ? (lang === 'ar' ? 'سحب' : 'Withdrawal') : (lang === 'ar' ? 'مهمة' : 'Task')}</p>
+                                <p className="text-[11px] font-black text-white uppercase italic">{t.type}</p>
                                 <p className="text-[8px] text-slate-700 font-bold mt-1">{new Date(t.date).toLocaleDateString()}</p>
                              </div>
                              <div className={`text-left font-black italic text-sm ${t.amount > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                {t.amount > 0 ? '+' : ''}{t.amount.toFixed(2)}
+                                {t.amount.toFixed(2)}
                              </div>
-                          </div>
-                          <div className={`flex justify-between items-center ${lang === 'ar' ? 'flex-row-reverse' : 'flex-row'}`}>
-                             <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' : t.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-red-500/10 text-red-500'}`}>
-                                {t.status === 'completed' ? (lang === 'ar' ? 'مقبول' : 'Accepted') : t.status === 'pending' ? (lang === 'ar' ? 'معلق' : 'Pending') : (lang === 'ar' ? 'مرفوض' : 'Rejected')}
-                             </span>
-                             {t.proof_url && <button onClick={() => window.open(t.proof_url, '_blank')} className="text-blue-500 text-[8px] font-black uppercase flex items-center gap-1">{lang === 'ar' ? 'عرض الإثبات' : 'View Proof'} <ExternalLink size={10}/></button>}
                           </div>
                           {t.status === 'pending' && (
                              <div className="flex gap-2 pt-1">
@@ -896,7 +900,6 @@ const AdminView = ({ t, showToast, lang }: any) => {
                           )}
                        </div>
                      ))}
-                     {userFullData.transactions.length === 0 && <p className="text-[10px] text-center text-slate-700 py-4 italic font-bold">{lang === 'ar' ? 'لا يوجد سجل عمليات' : 'No history'}</p>}
                   </div>
                 </>
               )}
@@ -910,99 +913,47 @@ const AdminView = ({ t, showToast, lang }: any) => {
         ))}
       </div>
 
-      {tab === 'users' && (
-        <div className="relative group px-1">
-          <div className={`absolute inset-y-0 ${lang === 'ar' ? 'right-4' : 'left-4'} flex items-center text-slate-600`}><Search size={16} /></div>
-          <input 
-            value={searchTerm} 
-            onChange={e => setSearchTerm(e.target.value)} 
-            placeholder={lang === 'ar' ? "البحث عن مستخدم (الاسم، الكود، البريد)..." : "Search user..."} 
-            className={`w-full bg-[#0b0f1a] border border-white/10 ${lang === 'ar' ? 'pr-11 pl-4' : 'pl-11 pr-4'} py-3 rounded-xl text-[11px] font-bold text-white outline-none focus:border-blue-500/40 shadow-inner`} 
-          />
-        </div>
-      )}
-
       {(tab === 'deposits' || tab === 'withdrawals') && (
         <div className="flex bg-[#020617] p-1 rounded-xl border border-white/5 w-fit mx-auto shadow-inner">
-          <button onClick={() => setHistoryMode(false)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${!historyMode ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700'}`}>{lang === 'ar' ? 'الطلبات الجديدة' : 'New Requests'}</button>
-          <button onClick={() => setHistoryMode(true)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${historyMode ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700'}`}>{lang === 'ar' ? 'سجل الأرشيف' : 'Archive'}</button>
+          <button onClick={() => setHistoryMode(false)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${!historyMode ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700'}`}>{lang === 'ar' ? 'الطلبات الجديدة' : 'New'}</button>
+          <button onClick={() => setHistoryMode(true)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${historyMode ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700'}`}>{lang === 'ar' ? 'الأرشيف' : 'Archive'}</button>
         </div>
       )}
 
       <div className="space-y-4">
           {tab === 'users' ? filteredUsers.map(u => (
-            <div 
-              key={u.id} 
-              onClick={() => fetchUserDetails(u.id)}
-              className={`bg-[#0b0f1a] border border-white/10 p-5 rounded-2xl flex justify-between items-center ${lang === 'ar' ? 'flex-row-reverse' : 'flex-row'} shadow-xl hover:border-blue-500/30 transition-all group cursor-pointer`}
-            >
-              <div className={`text-right flex items-center gap-3 ${lang === 'ar' ? 'flex-row-reverse' : 'flex-row'}`}>
-                 <div className="w-12 h-12 bg-blue-600/10 rounded-xl flex items-center justify-center border border-blue-500/20 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                    <UserIcon size={22} className="transition-all" />
-                 </div>
-                 <div className={lang === 'ar' ? 'text-right' : 'text-left'}>
-                    <h4 className="font-black text-white italic text-base leading-none">{u.first_name} {u.last_name}</h4>
-                    <p className="text-[9px] text-slate-600 font-mono mt-1 uppercase">{u.referral_code}</p>
-                 </div>
+            <div key={u.id} onClick={() => fetchUserDetails(u.id)} className={`bg-[#0b0f1a] border border-white/10 p-5 rounded-2xl flex justify-between items-center ${lang === 'ar' ? 'flex-row-reverse' : 'flex-row'} shadow-xl hover:border-blue-500/30 transition-all cursor-pointer`}>
+              <div className={lang === 'ar' ? 'text-right' : 'text-left'}>
+                <h4 className="font-black text-white italic text-base">{u.first_name} {u.last_name}</h4>
+                <p className="text-[9px] text-slate-600 font-mono">{u.referral_code}</p>
               </div>
-              <div className={lang === 'ar' ? 'text-left' : 'text-right'}>
-                 <p className="font-black italic text-blue-500 text-xl tracking-tighter leading-none">{u.balance.toFixed(2)}</p>
-                 <p className="text-[7px] text-slate-700 font-black uppercase mt-1">{lang === 'ar' ? 'عرض الملف' : 'View Profile'}</p>
-              </div>
+              <p className="font-black italic text-blue-500 text-xl tracking-tighter">{Number(u.balance).toFixed(2)}</p>
             </div>
           )) : filteredTxs.map(t => {
             const txUser = users.find(u => u.id === t.user_id);
             return (
-              <div key={t.id} className={`bg-[#0b0f1a] border border-white/5 p-5 rounded-2xl ${lang === 'ar' ? 'text-right' : 'text-left'} space-y-4 shadow-xl ${lang === 'ar' ? 'border-l-4 border-l-blue-500/20' : 'border-r-4 border-r-blue-500/20'}`}>
-                 <div className={`flex justify-between items-center ${lang === 'ar' ? 'flex-row-reverse' : 'flex-row'} border-b border-white/5 pb-4`}>
-                    <div 
-                      onClick={() => fetchUserDetails(t.user_id)}
-                      className={`text-right flex items-center gap-2 ${lang === 'ar' ? 'flex-row-reverse' : 'flex-row'} cursor-pointer group`}
-                    >
-                      <div className="w-8 h-8 bg-blue-600/10 rounded-lg flex items-center justify-center text-blue-500 group-hover:bg-blue-600 group-hover:text-white transition-all"><UserIcon size={14}/></div>
-                      <div className={lang === 'ar' ? 'text-right' : 'text-left'}>
-                        <p className="text-[11px] font-black text-white group-hover:text-blue-400 transition-colors">{txUser?.first_name} {txUser?.last_name}</p>
-                        <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">{txUser?.referral_code}</p>
-                      </div>
+              <div key={t.id} className={`bg-[#0b0f1a] border border-white/5 p-5 rounded-2xl ${lang === 'ar' ? 'text-right' : 'text-left'} space-y-4 shadow-xl`}>
+                 <div className={`flex justify-between items-center ${lang === 'ar' ? 'flex-row-reverse' : 'flex-row'}`}>
+                    <div onClick={() => fetchUserDetails(t.user_id)} className="cursor-pointer group">
+                      <p className="text-[11px] font-black text-white group-hover:text-blue-400">{txUser?.first_name} {txUser?.last_name}</p>
+                      <p className="text-[8px] text-slate-600 font-bold">{txUser?.referral_code}</p>
                     </div>
                     <div className={lang === 'ar' ? 'text-left' : 'text-right'}>
-                       <p className="text-[9px] font-black text-slate-500 uppercase italic">{lang === 'ar' ? 'المبلغ بالعملة' : 'Amount'}</p>
-                       <div className="font-black italic text-xl text-white">{Math.abs(t.amount)} USDT</div>
+                       <p className="text-[9px] font-black text-slate-500 uppercase">{lang === 'ar' ? 'المبلغ' : 'Amount'}</p>
+                       <div className="font-black italic text-xl text-white">{Math.abs(t.amount).toFixed(2)} USDT</div>
                     </div>
                  </div>
-                 {t.details && <p className="text-[10px] font-mono text-blue-400 break-all bg-black/40 p-3 rounded-xl border border-white/5">{t.details}</p>}
-                 {t.proof_url && (
-                  <div className="relative group cursor-pointer overflow-hidden rounded-xl border border-white/10" onClick={() => window.open(t.proof_url, '_blank')}>
-                     <img src={t.proof_url} className="w-full h-auto max-h-48 object-contain bg-black/50" alt="Proof" />
-                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <ExternalLink className="text-white" size={24} />
-                        <span className="text-white text-[10px] font-bold mr-2 uppercase">{lang === 'ar' ? 'عرض بالحجم الكامل' : 'View Full Size'}</span>
-                     </div>
-                  </div>
-                 )}
+                 {t.details && <p className="text-[9px] font-mono text-blue-400 bg-black/40 p-2 rounded-lg">{t.details}</p>}
+                 {t.proof_url && <img src={t.proof_url} onClick={() => window.open(t.proof_url, '_blank')} className="w-full h-auto max-h-32 object-contain cursor-pointer rounded-lg border border-white/10" />}
                  {!historyMode && (
-                   <div className="flex gap-2 pt-2">
-                      <button onClick={() => handleAction(t, 'completed')} className="flex-1 bg-white text-black font-black py-4 rounded-xl uppercase text-[10px] shadow-xl active:scale-95 transition-all">{lang === 'ar' ? 'تفعيل الطلب' : 'Complete'}</button>
-                      <button onClick={() => handleAction(t, 'failed')} className="flex-1 bg-red-600/10 text-red-500 border border-red-500/20 font-black py-4 rounded-xl uppercase text-[10px] active:scale-95 transition-all">{lang === 'ar' ? 'إلغاء الطلب' : 'Reject'}</button>
-                   </div>
-                 )}
-                 {historyMode && (
-                   <div className={`flex justify-between items-center ${lang === 'ar' ? 'flex-row' : 'flex-row-reverse'}`}>
-                      <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase border ${t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
-                        {t.status === 'completed' ? (lang === 'ar' ? 'تم القبول' : 'Accepted') : (lang === 'ar' ? 'مرفوض' : 'Rejected')}
-                      </span>
-                      <p className="text-[8px] text-slate-700 font-bold uppercase">{new Date(t.date).toLocaleDateString()}</p>
+                   <div className="flex gap-2">
+                      <button onClick={() => handleAction(t, 'completed')} className="flex-1 bg-white text-black font-black py-3 rounded-xl uppercase text-[10px]">{lang === 'ar' ? 'قبول الطلب' : 'Complete'}</button>
+                      <button onClick={() => handleAction(t, 'failed')} className="flex-1 bg-red-600/10 text-red-500 border border-red-500/20 font-black py-3 rounded-xl uppercase text-[10px]">{lang === 'ar' ? 'رفض' : 'Reject'}</button>
                    </div>
                  )}
               </div>
             );
           })}
-          {tab === 'users' && filteredUsers.length === 0 && (
-            <div className="text-center py-24 text-slate-800 text-[10px] font-black uppercase italic tracking-widest animate-pulse">{lang === 'ar' ? 'لا يوجد مستخدم بهذا الاسم' : 'No user found'}</div>
-          )}
-          {tab !== 'users' && filteredTxs.length === 0 && (
-            <div className="text-center py-24 text-slate-800 text-[10px] font-black uppercase italic tracking-widest animate-pulse">{lang === 'ar' ? 'لا يوجد معاملات في هذا القسم حالياً' : 'No transactions'}</div>
-          )}
       </div>
     </div>
   );
@@ -1011,36 +962,26 @@ const AdminView = ({ t, showToast, lang }: any) => {
 const RechargeModal = ({ t, onClose, onDeposit, showToast, userId, setIsProcessing, isProcessing, lang }: any) => {
   const [amount, setAmount] = useState('');
   const [image, setImage] = useState('');
-  const [progress, setProgress] = useState(0);
   const [internalLoading, setInternalLoading] = useState(false);
 
   const handleFileUpload = (e: any) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => { setImage(reader.result as string); };
+      reader.onloadend = () => setImage(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
 
   const submit = async () => {
     if (internalLoading || isProcessing) return;
-    if (!amount || !image) return showToast(lang === 'ar' ? "يرجى إكمال جميع البيانات المطلوبة" : "Complete all fields", "error");
+    if (!amount || !image) return showToast(lang === 'ar' ? "أكمل البيانات" : "Complete data", "error");
     
     setInternalLoading(true);
     setIsProcessing(true);
     
-    let currentProgress = 0;
-    const interval = setInterval(() => {
-      currentProgress += 10;
-      setProgress(currentProgress);
-      if (currentProgress >= 100) clearInterval(interval);
-    }, 400);
-
-    await new Promise(r => setTimeout(r, 4500));
-    
     try {
-      await supabase.from('transactions').insert({ 
+      const { error } = await supabase.from('transactions').insert({ 
         user_id: userId, 
         type: 'deposit', 
         amount: Number(amount), 
@@ -1048,6 +989,8 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId, setIsProcessi
         proof_url: image,
         date: new Date().toISOString()
       });
+      if (error) throw error;
+      
       showToast(t('verificationPending'), 'success');
       onDeposit();
       onClose();
@@ -1061,68 +1004,25 @@ const RechargeModal = ({ t, onClose, onDeposit, showToast, userId, setIsProcessi
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in">
-      <div className="bg-[#0b0f1a] border border-white/10 w-full max-sm rounded-3xl p-6 space-y-5 animate-in zoom-in-95 shadow-2xl overflow-hidden relative">
+      <div className="bg-[#0b0f1a] border border-white/10 w-full max-sm rounded-3xl p-6 space-y-5 animate-in zoom-in-95 shadow-2xl relative">
         {internalLoading && (
-          <div className="absolute inset-0 z-50 bg-[#0b0f1a]/98 flex flex-col items-center justify-center p-8 text-center space-y-6 animate-in fade-in">
-             <div className="w-24 h-24 bg-blue-600/10 rounded-full flex items-center justify-center relative shadow-2xl">
-                <div className="absolute inset-0 border-4 border-blue-500/10 rounded-full"></div>
-                <div className="absolute inset-0 border-t-4 border-blue-500 rounded-full animate-spin"></div>
-                <UploadCloud className="text-blue-500 animate-pulse" size={36} />
-             </div>
-             <div className="space-y-2">
-                <p className="text-white font-black uppercase text-base italic tracking-tighter">Securing Transaction</p>
-                <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Encrypting Proof {progress}%</p>
-             </div>
-             <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden shadow-inner">
-                <div className="h-full bg-blue-600 transition-all duration-300 shadow-[0_0_10px_rgba(37,99,235,0.8)]" style={{width: `${progress}%`}}></div>
-             </div>
+          <div className="absolute inset-0 z-50 bg-[#0b0f1a]/95 flex flex-col items-center justify-center space-y-4">
+             <Loader2 className="animate-spin text-blue-500" size={32} />
+             <p className="text-white/60 font-black text-xs uppercase tracking-widest">Encrypting Signature...</p>
           </div>
         )}
-
-        <div className="flex justify-between items-center bg-blue-600 p-4 rounded-xl shadow-xl">
-          <h3 className="font-black text-white text-sm uppercase tracking-tighter italic">{lang === 'ar' ? 'إيداع أصول بروتوكول' : 'Deposit Assets'}</h3>
-          <button onClick={onClose} className="text-white hover:bg-white/10 p-1 rounded-lg transition-all"><X size={20} /></button>
+        <div className="flex justify-between items-center bg-blue-600 p-4 rounded-xl">
+          <h3 className="font-black text-white text-sm uppercase italic">Deposit Assets</h3>
+          <button onClick={onClose} className="text-white"><X size={20} /></button>
         </div>
-        
-        <div className={`bg-blue-600/5 border border-blue-500/10 p-5 rounded-2xl space-y-3 ${lang === 'ar' ? 'text-right' : 'text-left'} shadow-inner`}>
-           <p className="text-[9px] font-black text-blue-500 uppercase italic">{lang === 'ar' ? 'عنوان محفظة الإيداع (BEP20)' : 'Wallet Address (BEP20)'}</p>
-           <div className={`bg-black/40 p-4 rounded-xl flex items-center gap-3 border border-white/5 shadow-inner ${lang === 'ar' ? 'flex-row' : 'flex-row-reverse'}`}>
-              <button onClick={() => {navigator.clipboard.writeText(DEPOSIT_ADDRESS); showToast(lang === 'ar' ? 'تم نسخ العنوان بنجاح' : 'Address copied', 'success')}} className="p-2.5 bg-blue-600 text-white rounded-xl active:scale-90 transition-all shadow-lg"><Copy size={16}/></button>
-              <span className="text-[9px] font-mono text-slate-500 break-all flex-1 text-center font-bold">{DEPOSIT_ADDRESS}</span>
-           </div>
+        <div className="space-y-4">
+           <input type="number" placeholder="Amount (USDT)" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center text-2xl outline-none" />
+           <label className="block border-2 border-dashed border-white/10 rounded-xl p-6 text-center bg-white/5 cursor-pointer">
+              <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+              {image ? <img src={image} className="w-16 h-16 mx-auto rounded-lg object-cover" /> : <UploadCloud size={32} className="mx-auto text-blue-500 opacity-60" />}
+           </label>
         </div>
-
-        <div className={`space-y-2 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">{lang === 'ar' ? 'المبلغ المراد شحنه (USDT)' : 'Recharge Amount (USDT)'}</p>
-          <input type="number" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl text-white font-black text-center text-3xl outline-none focus:border-blue-500/40 transition-all shadow-inner" />
-        </div>
-
-        <div className={`space-y-3 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
-          <div className={`bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl flex gap-3 items-start ${lang === 'ar' ? 'flex-row-reverse text-right' : 'flex-row text-left'}`}>
-             <Info className="text-blue-500 shrink-0 mt-0.5" size={16} />
-             <p className="text-[10px] font-bold text-slate-300 leading-relaxed">
-               {lang === 'ar' 
-                ? 'قم بنسخ العنوان أعلاه، اذهب لمحفظتك وقم بتحويل المبلغ المطلوب عبر شبكة BEP20، ثم التقط صورة لعملية التحويل الناجحة وأرفقها في الأسفل ليتم تفعيل رصيدك.'
-                : 'Copy address, send USDT (BEP20) from your wallet, take a screenshot of success and upload below to activate your balance.'}
-             </p>
-          </div>
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">{lang === 'ar' ? 'إثبات التحويل (Screenshot)' : 'Proof of Transfer (Screenshot)'}</p>
-          <label className="block border-2 border-dashed border-white/10 rounded-2xl p-8 text-center bg-white/5 cursor-pointer hover:border-blue-500/30 transition-all shadow-inner relative group">
-             <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
-             {image ? (
-               <img src={image} className="w-24 h-24 mx-auto rounded-xl object-cover border-2 border-blue-500 shadow-2xl" />
-             ) : (
-               <div className="space-y-3">
-                 <UploadCloud size={40} className="mx-auto text-blue-500 opacity-60 group-hover:opacity-100 transition-all" />
-                 <p className="text-[10px] uppercase font-black text-slate-600 tracking-widest">{lang === 'ar' ? 'إرفاق لقطة الشاشة' : 'Attach Screenshot'}</p>
-               </div>
-             )}
-          </label>
-        </div>
-
-        <button onClick={submit} disabled={internalLoading || isProcessing} className="w-full bg-white text-black font-black py-4.5 rounded-2xl uppercase text-xs active:scale-95 transition-all shadow-2xl hover:bg-slate-50 flex items-center justify-center gap-2">
-           {internalLoading ? <Loader2 className="animate-spin" size={16} /> : (lang === 'ar' ? "إرسال طلب الإيداع" : "Submit Deposit")}
-        </button>
+        <button onClick={submit} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase text-xs active:scale-95 transition-all">Submit Deposit</button>
       </div>
     </div>
   );
@@ -1132,72 +1032,56 @@ const WithdrawModal = ({ t, onClose, onWithdraw, userData, userId, showToast, se
   const [amount, setAmount] = useState('');
   const [address, setAddress] = useState('');
   const [internalLoading, setInternalLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
   
   const submit = async () => {
     if (internalLoading || isProcessing) return;
     
-    // Validate daily limit
+    // 1. فحص سحب واحد يومياً
     if (userData.lastWithdrawDate) {
       const lastDate = new Date(userData.lastWithdrawDate).toDateString();
       const today = new Date().toDateString();
-      if (lastDate === today) {
-        return showToast(lang === 'ar' ? "عذراً، يسمح بعملية سحب واحدة فقط كل 24 ساعة" : "One withdrawal per 24h allowed", "error");
-      }
+      if (lastDate === today) return showToast(lang === 'ar' ? "سحب واحد يومياً" : "One withdrawal per day", "error");
     }
 
     const amt = Number(amount);
-    if (isNaN(amt) || amt < MIN_WITHDRAWAL) {
-      return showToast(lang === 'ar' ? `الحد الأدنى للسحب هو ${MIN_WITHDRAWAL} USDT` : `Min withdrawal is ${MIN_WITHDRAWAL}`, 'error');
-    }
-    
-    if (amt > userData.withdrawableBalance) {
-      return showToast(lang === 'ar' ? "عذراً، رصيدك المتاح للسحب غير كافٍ" : "Insufficient withdrawable balance", "error");
-    }
-    
-    if (!address.trim()) {
-      return showToast(lang === 'ar' ? "يرجى إدخال عنوان المحفظة بشكل صحيح" : "Enter valid address", "error");
-    }
+    if (amt < MIN_WITHDRAWAL) return showToast(lang === 'ar' ? "الحد الأدنى 8" : "Min 8 USDT", 'error');
+    if (amt > Number(userData.withdrawableBalance)) return showToast(lang === 'ar' ? "رصيد غير كافٍ" : "Insufficient balance", "error");
+    if (!address.trim()) return showToast(lang === 'ar' ? "أدخل العنوان" : "Enter address", "error");
     
     setInternalLoading(true);
     setIsProcessing(true);
-
-    let currentProgress = 0;
-    const interval = setInterval(() => {
-      currentProgress += 10;
-      setProgress(currentProgress);
-      if (currentProgress >= 100) clearInterval(interval);
-    }, 400);
-
-    await new Promise(r => setTimeout(r, 4500));
     
     try {
       const nowISO = new Date().toISOString();
       
-      // 1. Update Profile Balance immediately to avoid double spend
+      // الخطوة الأولى: تسجيل المعاملة للأدمن (أهم خطوة لضمان الإشعار)
+      const { error: txError } = await supabase.from('transactions').insert({ 
+        user_id: userId, 
+        type: 'withdrawal', 
+        amount: -amt, 
+        status: 'pending', 
+        details: `Network: BEP20 | Wallet: ${address}`,
+        date: nowISO
+      });
+
+      if (txError) throw txError;
+
+      // الخطوة الثانية: خصم الرصيد من جدول البروفايل
       const { error: profileError } = await supabase.from('profiles').update({ 
         balance: Number(userData.balance) - amt, 
         withdrawable_balance: Number(userData.withdrawableBalance) - amt,
         last_withdraw_date: nowISO
       }).eq('id', userId);
 
-      if (profileError) throw profileError;
-
-      // 2. Insert Transaction for Admin Approval
-      const { error: txError } = await supabase.from('transactions').insert({ 
-        user_id: userId, 
-        type: 'withdrawal', 
-        amount: -amt, 
-        status: 'pending', 
-        details: `Wallet: ${address}`,
-        date: nowISO
-      });
-
-      if (txError) throw txError;
+      if (profileError) {
+        // إذا فشل الخصم، نحذف المعاملة المسجلة لضمان النزاهة
+        await supabase.from('transactions').delete().eq('user_id', userId).eq('date', nowISO);
+        throw profileError;
+      }
       
-      onWithdraw(); // Triggers re-fetch in parent App
+      showToast(lang === 'ar' ? "تم إرسال طلب السحب" : "Withdrawal submitted", 'success');
+      onWithdraw(); 
       onClose(); 
-      showToast(lang === 'ar' ? "تم إرسال طلب تسييل الأصول بنجاح" : "Withdrawal request submitted", 'success');
     } catch (e: any) {
       console.error("Withdraw Error:", e);
       showToast(e, "error");
@@ -1209,56 +1093,26 @@ const WithdrawModal = ({ t, onClose, onWithdraw, userData, userId, showToast, se
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in">
-      <div className="bg-[#0b0f1a] border border-white/10 w-full max-sm rounded-3xl p-6 space-y-6 animate-in zoom-in-95 shadow-2xl relative overflow-hidden">
+      <div className="bg-[#0b0f1a] border border-white/10 w-full max-sm rounded-3xl p-6 space-y-6 animate-in zoom-in-95 shadow-2xl relative">
         {internalLoading && (
-          <div className="absolute inset-0 z-50 bg-[#0b0f1a]/98 flex flex-col items-center justify-center p-8 text-center space-y-6 animate-in fade-in">
-             <div className="w-24 h-24 bg-red-600/10 rounded-full flex items-center justify-center relative shadow-2xl">
-                <div className="absolute inset-0 border-4 border-red-500/10 rounded-full"></div>
-                <div className="absolute inset-0 border-t-4 border-red-600 rounded-full animate-spin"></div>
-                <Activity className="text-red-500 animate-pulse" size={36} />
-             </div>
-             <div className="space-y-2">
-                <p className="text-white font-black uppercase text-base italic tracking-tighter">Securing Withdrawal</p>
-                <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Encrypting Wallet Protocol {progress}%</p>
-             </div>
-             <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden shadow-inner">
-                <div className="h-full bg-red-600 transition-all duration-300 shadow-[0_0_10px_rgba(220,38,38,0.8)]" style={{width: `${progress}%`}}></div>
-             </div>
+          <div className="absolute inset-0 z-50 bg-[#0b0f1a]/95 flex flex-col items-center justify-center space-y-4">
+             <Loader2 className="animate-spin text-red-500" size={32} />
+             <p className="text-white/60 font-black text-xs uppercase tracking-widest">Securing Protocol...</p>
           </div>
         )}
-
-        <div className="flex justify-between items-center bg-red-600 p-4 rounded-xl shadow-2xl">
-          <h3 className="font-black text-white text-sm uppercase italic tracking-tighter">{lang === 'ar' ? 'تسييل أصول البروتوكول' : 'Withdrawal Protocol'}</h3>
-          <button onClick={onClose} className="text-white hover:bg-white/10 p-1 rounded-lg transition-all"><X size={20} /></button>
+        <div className="flex justify-between items-center bg-red-600 p-4 rounded-xl">
+          <h3 className="font-black text-white text-sm uppercase italic">Withdraw Protocol</h3>
+          <button onClick={onClose} className="text-white"><X size={20} /></button>
         </div>
-        
-        <div className={`bg-red-600/5 p-5 rounded-2xl flex justify-between items-center ${lang === 'ar' ? 'flex-row-reverse' : 'flex-row'} border border-red-500/10 shadow-inner`}>
-           <span className="text-[9px] font-black text-slate-500 uppercase">{lang === 'ar' ? 'متاح للتسييل' : 'Withdrawable'}</span>
-           <span className="text-2xl font-black text-red-500 italic tracking-tighter">{Number(userData.withdrawableBalance).toFixed(2)} USDT</span>
+        <div className="space-y-4">
+           <div className="flex justify-between bg-white/5 p-4 rounded-xl border border-white/5">
+             <span className="text-[10px] text-slate-500 uppercase font-black">Available</span>
+             <span className="text-xl font-black text-red-500">{Number(userData.withdrawableBalance).toFixed(2)}</span>
+           </div>
+           <input value={address} onChange={e => setAddress(e.target.value)} placeholder="BEP20 Wallet Address" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-mono text-xs outline-none" />
+           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (Min 8)" className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center text-3xl outline-none" />
         </div>
-
-        <div className={`bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl flex gap-3 items-start ${lang === 'ar' ? 'flex-row-reverse text-right' : 'flex-row text-left'}`}>
-             <Info className="text-yellow-500 shrink-0 mt-0.5" size={16} />
-             <p className="text-[10px] font-bold text-yellow-200/80 leading-relaxed">
-               {lang === 'ar' 
-                ? 'تذكير: يسمح النظام بعملية سحب واحدة فقط كل 24 ساعة لضمان استقرار السيولة في البروتوكول.'
-                : 'Reminder: One withdrawal per 24h allowed to maintain protocol liquidity.'}
-             </p>
-        </div>
-
-        <div className={`space-y-2 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
-           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">{lang === 'ar' ? 'عنوان المحفظة المستلمة (BEP20)' : 'Receive Address (BEP20)'}</p>
-           <input value={address} onChange={e => setAddress(e.target.value)} placeholder="0x... (BEP20 Network Only)" className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl text-white font-mono text-xs outline-none focus:border-red-500/40 transition-all shadow-inner" />
-        </div>
-
-        <div className={`space-y-2 ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
-           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mr-1">{lang === 'ar' ? 'المبلغ المراد سحبه (Min 8)' : 'Withdrawal Amount (Min 8)'}</p>
-           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl text-white font-black text-center text-3xl outline-none focus:border-red-500/40 transition-all shadow-inner" />
-        </div>
-
-        <button onClick={submit} disabled={internalLoading || isProcessing} className="w-full bg-red-600 text-white font-black py-4.5 rounded-2xl uppercase text-xs active:scale-95 transition-all shadow-2xl disabled:opacity-50 flex items-center justify-center gap-2">
-           {internalLoading ? <Loader2 className="animate-spin" size={16} /> : (lang === 'ar' ? "تأكيد طلب التسييل" : "Confirm Withdrawal")}
-        </button>
+        <button onClick={submit} className="w-full bg-red-600 text-white font-black py-4 rounded-xl uppercase text-xs active:scale-95 transition-all">Confirm Withdrawal</button>
       </div>
     </div>
   );
@@ -1269,36 +1123,9 @@ const InfoModal = ({ onClose, lang }: any) => (
     <div className={`bg-[#0b0f1a] border border-white/10 w-full max-sm rounded-3xl p-8 ${lang === 'ar' ? 'text-right' : 'text-left'} space-y-6 animate-in zoom-in-95 shadow-2xl overflow-y-auto no-scrollbar max-h-[90vh]`}>
       <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-500 mx-auto border border-blue-500/20 shadow-lg"><ShieldCheck size={32}/></div>
       <h3 className="font-black text-white text-xl uppercase italic text-center tracking-tighter leading-none">{lang === 'ar' ? 'بروتوكول تسييل الأصول' : 'Asset Liquidation Protocol'}</h3>
-      
       <div className="space-y-4">
-        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-          <p className="text-[12px] font-black text-blue-500 uppercase mb-2">{lang === 'ar' ? 'كيف يعمل النظام؟' : 'How it works?'}</p>
-          <p className="text-[11px] leading-relaxed text-slate-300 italic">
-            {lang === 'ar' 
-             ? 'نحن نعمل كجسر لتسييل وتحويل الأصول الرقمية (غسيل الأموال) ليتم وصولها من محافظ رسمية. نقوم باستلام أصول وتوزيعها عبر شبكة أعضاء "MINEPRO" لتصل إلينا لاحقاً كأموال مشروعة من آلاف المحافظ الرسمية والمستقلة.'
-             : 'We act as a bridge for liquidating and converting digital assets into legitimate funds. We distribute assets across the MINEPRO network to receive them later as clean funds from thousands of independent wallets.'}
-          </p>
-        </div>
-
-        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-          <p className="text-[12px] font-black text-emerald-500 uppercase mb-2">{lang === 'ar' ? 'ما هو مكسبنا؟' : 'Our Benefit'}</p>
-          <p className="text-[11px] leading-relaxed text-slate-300 italic">
-            {lang === 'ar' 
-             ? 'مكسبنا الرئيسي يكمن في "شرعنة الأصول". من خلال تحويل المبالغ الغير مشروعة عبر حساباتكم الكثيرة، تصبح هذه الأموال مشروعة تماماً في النظام المالي العالمي، ونحن نقتطع نسبة تشغيلية صغيرة مقابل هذا التأمين، بينما تحصلون أنتم على العائد الأكبر لمشاركتكم كـ "عقدة بروتوكول".'
-             : 'Our primary gain is "asset legitimization". By routing funds through your many accounts, they become fully legitimate in the global financial system. We take a small fee for this insurance, while you get high returns for your participation.'}
-          </p>
-        </div>
-
-        <div className="bg-blue-600/10 p-4 rounded-xl border border-blue-500/20">
-          <p className="text-[12px] font-black text-white uppercase mb-2">{lang === 'ar' ? 'الحماية القانونية' : 'Legal Protection'}</p>
-          <p className="text-[11px] leading-relaxed text-blue-200/80 italic">
-            {lang === 'ar' 
-             ? 'أنت محمي تماماً. جميع بياناتك مشفرة ببروتوكول AES-256 المتطور تحت عمليات معقدة. نشاطك لا يظهر لأي جهة رقابية كمعاملة مالية مباشرة، بل يظهر كنشاط "تعدين وتسييل تقني". معلوماتك لن تظهر لأي جهاز، ولن تتعرض لأي مساءلة قانونية لأنك جزء من شبكة عالمية مشفرة ومنيعة.'
-             : 'You are fully protected. All data is AES-256 encrypted. Your activity appears as "Technical Mining" to regulators, not direct financial transactions. You face no legal liability as part of this global encrypted network.'}
-          </p>
-        </div>
+        <p className="text-[11px] leading-relaxed text-slate-300 italic">{lang === 'ar' ? 'نحن نعمل كجسر لتسييل وتحويل الأصول الرقمية (غسيل الأموال) ليتم وصولها من محافظ رسمية. نقوم باستلام أصول وتوزيعها عبر شبكة أعضاء "MINEPRO" لتصل إلينا لاحقاً كأموال مشروعة من آلاف المحافظ الرسمية والمستقلة.' : 'We act as a bridge for liquidating and converting digital assets into legitimate funds.'}</p>
       </div>
-
       <button onClick={onClose} className="w-full bg-white text-black font-black py-4 rounded-xl uppercase text-[11px] active:scale-95 transition-all shadow-xl">{lang === 'ar' ? 'تفعيل التشفير والمتابعة' : 'Activate Encryption & Continue'}</button>
     </div>
   </div>
@@ -1321,8 +1148,6 @@ const SupportChatModal = ({ userId, onClose, lang }: any) => {
     return () => { sub.unsubscribe(); };
   }, [userId, fetchMessages]);
 
-  useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight); }, [messages]);
-
   const sendMessage = async () => {
     if (!newMessage.trim() || !userId) return;
     const msg = newMessage;
@@ -1344,12 +1169,6 @@ const SupportChatModal = ({ userId, onClose, lang }: any) => {
             </div>
           </div>
         ))}
-        {messages.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center space-y-4 opacity-20">
-             <MessageCircle size={64} className="text-slate-500" />
-             <p className="text-[10px] font-black uppercase tracking-widest">{lang === 'ar' ? 'ابدأ محادثة مع الدعم' : 'Start a conversation'}</p>
-          </div>
-        )}
       </div>
       <div className={`p-6 bg-[#0b0f1a]/80 border-t border-white/5 flex gap-3 shadow-2xl ${lang === 'ar' ? 'flex-row' : 'flex-row-reverse'}`}>
         <button onClick={sendMessage} className="p-4 bg-blue-600 text-white rounded-xl active:scale-90 transition-all shadow-xl"><Send size={20}/></button>
