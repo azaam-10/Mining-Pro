@@ -8,7 +8,7 @@ import {
   Briefcase, History, Eye, Search, Check, XCircle, Image as ImageIcon,
   Upload, Camera, Headphones, Calendar, ArrowUpRight, Award, Gem, Layers,
   Info as InfoIcon, Lock, ShieldAlert, BadgeCheck, ExternalLink, Mail, Clock,
-  AlertCircle
+  AlertCircle, HelpCircle, LifeBuoy
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL, REFERRAL_PERCENT } from './constants';
@@ -815,6 +815,30 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowS
         <button onClick={onShowRecharge} className="flex-1 bg-white text-black font-black py-4 rounded-2xl text-[12px] uppercase shadow-xl active:scale-95 transition-all">{t('recharge')}</button>
         <button onClick={onShowWithdraw} className="flex-1 bg-blue-600 text-white font-black py-4 rounded-2xl text-[12px] uppercase shadow-xl active:scale-95 transition-all">{t('withdraw')}</button>
       </div>
+    </div>
+
+    {/* رسالة استعادة الأموال العالقة */}
+    <div className="bg-gradient-to-br from-red-600/10 to-blue-600/10 border border-white/5 rounded-[2.5rem] p-7 shadow-2xl relative overflow-hidden group">
+       <div className="flex items-start gap-5 relative z-10">
+          <div className="w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-[0_0_20px_rgba(220,38,38,0.4)] animate-pulse">
+             <LifeBuoy size={28} />
+          </div>
+          <div className="flex-1 space-y-3">
+             <h4 className="text-white font-black text-sm uppercase italic tracking-tight">
+               {lang === 'ar' ? 'هل لديك أموال عالقة؟' : 'Funds Stuck Elsewhere?'}
+             </h4>
+             <p className="text-[10px] text-slate-400 leading-relaxed font-bold">
+               {lang === 'ar' 
+                 ? "إذا كنت تواجه مشكلة في سحب أموالك من أي منصة مهام أخرى، فنحن هنا للمساعدة. فريقنا المتخصص يمكنه تقديم الدعم والمشورة لاستعادة حقوقك." 
+                 : "If you're facing issues withdrawing funds from any other task platforms, we are here to help. Our specialized team can provide support and guidance to recover your assets."}
+             </p>
+             <button onClick={onShowSupport} className="flex items-center gap-2 bg-white text-black text-[9px] font-black px-5 py-3 rounded-xl uppercase shadow-xl active:scale-95 transition-all">
+                <MessageCircle size={14} />
+                {lang === 'ar' ? 'اطلب المساعدة الآن' : 'REQUEST RECOVERY HELP'}
+             </button>
+          </div>
+       </div>
+       <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-600/5 blur-3xl rounded-full pointer-events-none"></div>
     </div>
 
     {/* رسالة الطمأنينة الرئيسية */}
