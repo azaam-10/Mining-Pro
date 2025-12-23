@@ -9,6 +9,18 @@ export const REFERRAL_PERCENT = 0.10;
 
 const generateMachines = (): Machine[] => {
   const machines: Machine[] = [];
+  
+  // Add Free Machine first
+  machines.push({
+    id: 0,
+    name: "FREE STARTER NODE",
+    price: 0,
+    dailyProfit: 0.5,
+    duration: 15,
+    description: "ماكينة تجريبية مجانية لجميع المستخدمين لبدء رحلة التعدين",
+    color: "from-slate-500/20 to-slate-600/40"
+  });
+
   const prices: number[] = [];
 
   // Steps requested by user:

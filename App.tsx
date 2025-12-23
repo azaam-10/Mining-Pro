@@ -7,7 +7,8 @@ import {
   MessageCircle, Send, LogOut, TrendingUp, Activity, Info, 
   Briefcase, History, Eye, Search, Check, XCircle, Image as ImageIcon,
   Upload, Camera, Headphones, Calendar, ArrowUpRight, Award, Gem, Layers,
-  Info as InfoIcon, Lock, ShieldAlert, BadgeCheck
+  Info as InfoIcon, Lock, ShieldAlert, BadgeCheck, ExternalLink, Mail, Clock,
+  AlertCircle
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL, REFERRAL_PERCENT } from './constants';
@@ -253,6 +254,7 @@ const AdminView = ({ t, showToast, lang, adminId }: any) => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeChatUser, setActiveChatUser] = useState<string | null>(null);
+  const [selectedUserDetails, setSelectedUserDetails] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -322,6 +324,8 @@ const AdminView = ({ t, showToast, lang, adminId }: any) => {
 
   return (
     <div className="space-y-8 animate-in fade-in pb-16">
+       {selectedUserDetails && <UserDetailsModal userId={selectedUserDetails} onClose={() => setSelectedUserDetails(null)} lang={lang} />}
+
        <div className="bg-[#0b0f1a] p-2 rounded-[2rem] border border-white/5 flex gap-1.5 shadow-2xl overflow-x-auto no-scrollbar">
          <button onClick={() => setMainTab('deposit')} className={`flex-1 min-w-[80px] py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all ${mainTab === 'deposit' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>{lang === 'ar' ? 'إيداع' : 'Dep'}</button>
          <button onClick={() => setMainTab('withdraw')} className={`flex-1 min-w-[80px] py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all ${mainTab === 'withdraw' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>{lang === 'ar' ? 'سحب' : 'With'}</button>
@@ -342,15 +346,15 @@ const AdminView = ({ t, showToast, lang, adminId }: any) => {
        {loading ? <div className="flex justify-center py-20"><Loader2 className="animate-spin text-blue-500" size={40} /></div> : (
          <div className="space-y-6">
            {mainTab === 'messages' && data.map((t: any) => (
-              <div key={t.userId} onClick={() => setActiveChatUser(t.userId)} className="bg-[#0b0f1a] p-5 rounded-3xl border border-white/5 flex justify-between items-center cursor-pointer hover:border-blue-500/20 active:scale-95 transition-all shadow-xl group">
-                <div className="flex gap-4 items-center overflow-hidden">
-                   <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 font-black text-lg italic shrink-0">{String(t.name[0])}</div>
+              <div key={t.userId} className="bg-[#0b0f1a] p-5 rounded-3xl border border-white/5 flex justify-between items-center shadow-xl group">
+                <div onClick={() => setSelectedUserDetails(t.userId)} className="flex gap-4 items-center overflow-hidden flex-1 cursor-pointer">
+                   <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 font-black text-lg italic shrink-0">{t.name ? t.name[0] : '?'}</div>
                    <div className="overflow-hidden">
-                     <p className="text-white font-black text-sm uppercase italic truncate">{String(t.name)}</p>
+                     <p className="text-white font-black text-sm uppercase italic truncate hover:text-blue-400 transition-colors">{String(t.name)}</p>
                      <p className="text-[10px] text-slate-500 truncate">{String(t.lastMsg)}</p>
                    </div>
                 </div>
-                <div className="text-right shrink-0 ml-2">
+                <div onClick={() => setActiveChatUser(t.userId)} className="text-right shrink-0 ml-2 cursor-pointer p-2 hover:bg-white/5 rounded-xl transition-all">
                    <p className="text-[9px] text-slate-700 font-black">{new Date(t.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
                    <div className="w-2.5 h-2.5 bg-blue-600 rounded-full ml-auto mt-2 animate-pulse"></div>
                 </div>
@@ -360,8 +364,8 @@ const AdminView = ({ t, showToast, lang, adminId }: any) => {
            {['deposit', 'withdraw'].includes(mainTab) && data.map((item: any) => (
              <div key={item.id} className="bg-[#0b0f1a] p-7 rounded-[2.5rem] border border-white/10 space-y-6 shadow-2xl relative overflow-hidden">
                 <div className="flex justify-between items-start">
-                   <div>
-                     <h4 className="text-white font-black text-lg uppercase italic tracking-tight truncate max-w-[150px]">{String(item.profiles?.first_name || 'Anonymous')}</h4>
+                   <div onClick={() => setSelectedUserDetails(item.user_id)} className="cursor-pointer group">
+                     <h4 className="text-white font-black text-lg uppercase italic tracking-tight truncate max-w-[150px] group-hover:text-blue-400 transition-colors">{String(item.profiles?.first_name || 'Anonymous')}</h4>
                      <p className="text-[10px] text-slate-500 font-mono truncate max-w-[150px]">{String(item.profiles?.email || 'No Email')}</p>
                    </div>
                    <div className="text-right">
@@ -393,11 +397,14 @@ const AdminView = ({ t, showToast, lang, adminId }: any) => {
            ))}
 
            {mainTab === 'members' && data.map((item: any) => (
-             <div key={item.id} className="bg-[#0b0f1a] p-5 rounded-3xl border border-white/5 space-y-3">
+             <div key={item.id} onClick={() => setSelectedUserDetails(item.id)} className="bg-[#0b0f1a] p-5 rounded-3xl border border-white/5 space-y-3 cursor-pointer hover:border-blue-500/30 transition-all group active:scale-[0.98]">
                 <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-white font-black text-sm uppercase italic">{String(item.first_name)}</p>
-                    <p className="text-[10px] text-slate-500">{String(item.email)}</p>
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 font-black text-xs">{item.first_name ? item.first_name[0] : '?'}</div>
+                    <div>
+                      <p className="text-white font-black text-sm uppercase italic group-hover:text-blue-400">{String(item.first_name)}</p>
+                      <p className="text-[10px] text-slate-500">{String(item.email)}</p>
+                    </div>
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-black text-blue-500 italic">{(item.balance || 0).toFixed(2)}</p>
@@ -414,6 +421,147 @@ const AdminView = ({ t, showToast, lang, adminId }: any) => {
            )}
          </div>
        )}
+    </div>
+  );
+};
+
+const UserDetailsModal = ({ userId, onClose, lang }: { userId: string, onClose: () => void, lang: Language }) => {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetch = async () => {
+      const [p, m, t] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('user_machines').select('*').eq('user_id', userId),
+        supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false })
+      ]);
+      if (p.data) setData({ ...p.data, machines: m.data || [], txs: t.data || [] });
+      setLoading(false);
+    };
+    fetch();
+  }, [userId]);
+
+  if (loading) return (
+    <div className="fixed inset-0 z-[210] bg-black/95 flex items-center justify-center backdrop-blur-md">
+      <Loader2 className="animate-spin text-blue-500" size={40} />
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[210] bg-black/95 flex flex-col animate-in slide-in-from-bottom backdrop-blur-md">
+       <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#0b0f1a]">
+          <button onClick={onClose} className="p-2.5 bg-white/5 rounded-xl text-slate-400 hover:text-white"><X size={24}/></button>
+          <div className="text-center">
+            <h3 className="font-black text-white italic tracking-widest uppercase">{lang === 'ar' ? 'ملف العميل' : 'USER TERMINAL'}</h3>
+            <p className="text-[8px] text-blue-500 font-mono">{userId}</p>
+          </div>
+          <div className="w-10"></div>
+       </div>
+
+       <div className="flex-1 overflow-y-auto p-6 space-y-8 no-scrollbar pb-10">
+          {/* Main Info */}
+          <div className="bg-gradient-to-br from-blue-600/10 to-transparent p-7 rounded-[2.5rem] border border-blue-500/20 space-y-6 relative overflow-hidden">
+             <div className="flex gap-6 items-center">
+                <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-2xl font-black italic shadow-2xl">{data.first_name ? data.first_name[0] : '?'}</div>
+                <div>
+                   <h2 className="text-2xl font-black text-white italic tracking-tight">{data.first_name} {data.last_name}</h2>
+                   <div className="flex items-center gap-2 mt-1 text-slate-500">
+                      <Mail size={12} />
+                      <p className="text-[10px] font-mono">{data.email}</p>
+                   </div>
+                </div>
+             </div>
+             
+             <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className="bg-black/60 p-4 rounded-2xl border border-white/5 text-center">
+                   <p className="text-[8px] text-slate-500 font-black uppercase mb-1">Total Balance</p>
+                   <p className="text-xl font-black text-white">{(data.balance || 0).toFixed(2)}</p>
+                </div>
+                <div className="bg-black/60 p-4 rounded-2xl border border-white/5 text-center">
+                   <p className="text-[8px] text-slate-500 font-black uppercase mb-1">Withdrawable</p>
+                   <p className="text-xl font-black text-blue-500">{(data.withdrawable_balance || 0).toFixed(2)}</p>
+                </div>
+                <div className="bg-black/60 p-4 rounded-2xl border border-white/5 text-center">
+                   <p className="text-[8px] text-slate-500 font-black uppercase mb-1">Total Deposit</p>
+                   <p className="text-xl font-black text-emerald-500">{(data.total_recharge || 0).toFixed(2)}</p>
+                </div>
+                <div className="bg-black/60 p-4 rounded-2xl border border-white/5 text-center">
+                   <p className="text-[8px] text-slate-500 font-black uppercase mb-1">Total Withdraw</p>
+                   <p className="text-xl font-black text-red-500">{(data.total_withdraw || 0).toFixed(2)}</p>
+                </div>
+             </div>
+
+             <div className="flex justify-between items-center px-2 py-3 bg-white/5 rounded-xl border border-white/5">
+                <div className="flex items-center gap-2">
+                   <Users size={14} className="text-slate-500" />
+                   <p className="text-[9px] text-slate-400 font-black uppercase">Ref Code: <span className="text-white ml-1">{data.referral_code}</span></p>
+                </div>
+                <div className="flex items-center gap-2">
+                   <Clock size={14} className="text-slate-500" />
+                   <p className="text-[9px] text-slate-400 font-black">{new Date(data.created_at).toLocaleDateString()}</p>
+                </div>
+             </div>
+          </div>
+
+          {/* Owned Machines */}
+          <div className="space-y-4">
+             <div className="flex items-center gap-2 px-1">
+                <Cpu size={16} className="text-blue-500" />
+                <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">{lang === 'ar' ? 'الماكينات النشطة' : 'ACTIVE NODES'}</h4>
+             </div>
+             {data.machines.length === 0 ? (
+               <div className="p-8 text-center bg-white/5 rounded-3xl border border-dashed border-white/10 opacity-30">
+                  <p className="text-[10px] font-black">NO ACTIVE HARDWARE</p>
+               </div>
+             ) : (
+               <div className="space-y-3">
+                  {data.machines.map((um: any) => {
+                    const m = MACHINES.find(x => x.id === um.machine_id);
+                    return (
+                      <div key={um.id} className="bg-[#0b0f1a] p-4 rounded-2xl border border-white/5 flex justify-between items-center shadow-lg">
+                         <div>
+                            <p className="text-xs font-black text-white italic uppercase">{String(m?.name)}</p>
+                            <p className="text-[9px] text-slate-500 mt-1 uppercase">{um.remaining_days} cycles left</p>
+                         </div>
+                         <div className="text-right">
+                            <p className="text-lg font-black text-emerald-500 italic">+{Number(um.total_earned).toFixed(2)}</p>
+                            <p className="text-[8px] text-slate-700 font-black">TOTAL PROFIT</p>
+                         </div>
+                      </div>
+                    );
+                  })}
+               </div>
+             )}
+          </div>
+
+          {/* Transaction History */}
+          <div className="space-y-4">
+             <div className="flex items-center gap-2 px-1">
+                <History size={16} className="text-blue-500" />
+                <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">{lang === 'ar' ? 'سجل العمليات الكامل' : 'PROTOCOL LOGS'}</h4>
+             </div>
+             <div className="space-y-2">
+                {data.txs.map((tx: any) => (
+                  <div key={tx.id} className="bg-[#0b0f1a] p-4 rounded-xl border border-white/5 flex justify-between items-center">
+                    <div className="flex gap-3 items-center">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs ${tx.amount > 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                         {tx.type === 'deposit' ? <Zap size={14}/> : (tx.type === 'withdrawal' ? <ExternalLink size={14}/> : <TrendingUp size={14}/>)}
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-white uppercase italic">{String(tx.type)}</p>
+                        <p className="text-[8px] text-slate-600 font-bold">{new Date(tx.date).toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-black text-sm ${tx.amount > 0 ? 'text-emerald-500' : 'text-red-500'}`}>{tx.amount > 0 ? '+' : ''}{Number(tx.amount).toFixed(2)}</p>
+                      <p className={`text-[7px] font-black uppercase tracking-widest ${tx.status === 'completed' ? 'text-emerald-600' : (tx.status === 'pending' ? 'text-orange-500' : 'text-red-700')}`}>{String(tx.status)}</p>
+                    </div>
+                  </div>
+                ))}
+             </div>
+          </div>
+       </div>
     </div>
   );
 };
@@ -539,45 +687,100 @@ const WithdrawModal = ({ onClose, userData, userId, showToast, lang }: any) => {
   const [amount, setAmount] = useState('');
   const [address, setAddress] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const handleAmountChange = (val: string) => {
+    setAmount(val);
+    if (localError) setLocalError(null);
+  };
+
+  const handleAddressChange = (val: string) => {
+    setAddress(val);
+    if (localError) setLocalError(null);
+  };
 
   const submit = async () => {
     const amt = Number(amount);
-    if (!amt || amt < MIN_WITHDRAWAL) return showToast(lang === 'ar' ? `أقل سحب ${MIN_WITHDRAWAL} USDT` : `Min: ${MIN_WITHDRAWAL}`, "error");
-    if (amt > (userData?.withdrawableBalance || 0)) return showToast(lang === 'ar' ? "رصيد غير كافٍ" : "Insufficient funds", "error");
-    if (!address.trim()) return showToast(lang === 'ar' ? "أدخل العنوان" : "Address required", "error");
+    
+    // Validate
+    if (!amt || amt <= 0) {
+      return setLocalError(lang === 'ar' ? "يرجى إدخال مبلغ صحيح" : "Invalid amount");
+    }
+    if (amt < MIN_WITHDRAWAL) {
+      return setLocalError(lang === 'ar' ? `الحد الأدنى للسحب هو ${MIN_WITHDRAWAL} USDT` : `Min withdrawal is ${MIN_WITHDRAWAL} USDT`);
+    }
+    if (amt > (userData?.withdrawableBalance || 0)) {
+      return setLocalError(lang === 'ar' ? "الرصيد القابل للسحب غير كافٍ" : "Insufficient withdrawable funds");
+    }
+    if (!address.trim()) {
+      return setLocalError(lang === 'ar' ? "يرجى إدخال عنوان المحفظة" : "Wallet address required");
+    }
     
     setSubmitting(true);
+    setLocalError(null);
     try {
       const { error } = await supabase.from('transactions').insert({ 
         user_id: userId, type: 'withdrawal', amount: -amt, status: 'pending', 
         date: new Date().toISOString(), details: address.trim()
       });
       if (error) throw error;
+
+      // Update local and remote balance
       await supabase.from('profiles').update({ 
         balance: Number(userData.balance) - amt, 
         withdrawable_balance: Number(userData.withdrawableBalance) - amt 
       }).eq('id', userId);
 
-      showToast(lang === 'ar' ? "تم إرسال طلب السحب" : "Withdrawal requested", "success"); 
+      showToast(lang === 'ar' ? "تم إرسال طلب السحب بنجاح" : "Withdrawal requested successfully", "success"); 
       onClose();
-    } catch (e: any) { showToast(e, "error"); }
+    } catch (e: any) { 
+      setLocalError(e.message || "Withdrawal failed");
+    }
     finally { setSubmitting(false); }
   };
 
   return (
     <div className="fixed inset-0 z-[110] bg-black/95 p-7 flex items-center justify-center backdrop-blur-xl animate-in zoom-in-95">
        <div className="bg-[#0b0f1a] w-full max-sm p-8 rounded-[2.5rem] border border-white/10 space-y-6 shadow-2xl relative">
-          <button onClick={onClose} className="absolute top-4 right-4 p-2.5 bg-white/5 rounded-xl text-slate-400"><X size={20}/></button>
+          <button onClick={onClose} className="absolute top-4 right-4 p-2.5 bg-white/5 rounded-xl text-slate-400 hover:text-white transition-colors"><X size={20}/></button>
+          
           <div className="text-center space-y-2">
             <h3 className="text-white font-black italic uppercase text-xl">{lang === 'ar' ? 'سحب الرصيد' : 'Asset Release'}</h3>
           </div>
+
           <div className="bg-blue-600/10 p-5 rounded-2xl border border-blue-500/20 text-center">
             <p className="text-[9px] text-blue-400 uppercase font-black">{lang === 'ar' ? 'المتاح للسحب' : 'Available balance'}</p>
             <p className="text-2xl font-black text-white italic">{(userData?.withdrawableBalance || 0).toFixed(2)} USDT</p>
           </div>
+
+          {localError && (
+            <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl flex items-center gap-3 animate-in fade-in zoom-in-95">
+               <AlertCircle size={20} className="text-red-500 shrink-0" />
+               <p className="text-[11px] font-bold text-red-200">{localError}</p>
+            </div>
+          )}
+
           <div className="space-y-4">
-            <input placeholder="0x..." value={address} onChange={e => setAddress(e.target.value)} className="w-full bg-black/50 border border-white/5 p-4 rounded-2xl text-[11px] text-white font-mono outline-none" />
-            <input type="number" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/50 border border-white/5 p-4 rounded-2xl text-center text-white font-black text-xl italic outline-none" />
+            <div className="space-y-1.5">
+               <p className="text-[9px] text-slate-500 font-black uppercase px-1">{lang === 'ar' ? 'عنوان محفظة (BEP20)' : 'Wallet Address (BEP20)'}</p>
+               <input 
+                 placeholder="0x..." 
+                 value={address} 
+                 onChange={e => handleAddressChange(e.target.value)} 
+                 className={`w-full bg-black/50 border ${localError && !address.trim() ? 'border-red-500/50' : 'border-white/5'} p-4 rounded-2xl text-[11px] text-white font-mono outline-none focus:border-blue-500/40`} 
+               />
+            </div>
+
+            <div className="space-y-1.5">
+               <p className="text-[9px] text-slate-500 font-black uppercase px-1">{lang === 'ar' ? 'الكمية' : 'Amount'}</p>
+               <input 
+                 type="number" 
+                 placeholder="0.00" 
+                 value={amount} 
+                 onChange={e => handleAmountChange(e.target.value)} 
+                 className={`w-full bg-black/50 border ${localError && (Number(amount) < MIN_WITHDRAWAL || Number(amount) > userData.withdrawableBalance) ? 'border-red-500/50' : 'border-white/5'} p-4 rounded-2xl text-center text-white font-black text-xl italic outline-none focus:border-blue-500/40`} 
+               />
+            </div>
           </div>
 
           <div className="flex items-center gap-2 p-3 bg-blue-500/5 rounded-xl border border-blue-500/10">
@@ -589,7 +792,7 @@ const WithdrawModal = ({ onClose, userData, userId, showToast, lang }: any) => {
             </p>
           </div>
 
-          <button onClick={submit} disabled={submitting} className="w-full bg-white text-black py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest flex justify-center items-center gap-2">
+          <button onClick={submit} disabled={submitting} className="w-full bg-white text-black py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest flex justify-center items-center gap-2 active:scale-95 transition-transform shadow-xl">
             {submitting ? <Loader2 className="animate-spin" size={18} /> : (lang === 'ar' ? 'تأكيد السحب' : 'Establish Payout') }
           </button>
        </div>
@@ -898,33 +1101,70 @@ const AuthView = ({ lang, t, showToast }: any) => {
 
 const ProtocolLoadingScreen = () => <div className="min-h-screen bg-[#020617] flex items-center justify-center flex-col gap-8"><div className="relative"><Loader2 className="animate-spin text-blue-500" size={56}/><div className="absolute inset-0 bg-blue-500/30 blur-3xl rounded-full"></div></div><p className="text-[10px] font-black text-slate-500 tracking-[0.6em] uppercase animate-pulse">Establishing Connection</p></div>;
 const NavItem = ({ icon: Icon, label, active, onClick }: any) => <button onClick={onClick} className={`flex flex-col items-center gap-2 transition-all duration-300 relative ${active ? 'text-blue-500 scale-110' : 'text-slate-700 opacity-40 hover:opacity-100 hover:scale-105'}`}><Icon size={22}/><span className="text-[8px] font-black uppercase tracking-[0.2em]">{label}</span></button>;
-const InfoModal = ({ onClose }: any) => <div className="fixed inset-0 bg-black/98 z-[300] flex items-center justify-center p-10 text-center animate-in fade-in"><div className="max-w-xs space-y-8"><div className="w-24 h-24 bg-blue-600 rounded-[2rem] mx-auto flex items-center justify-center shadow-[0_0_50px_rgba(37,99,235,0.4)]"><ShieldCheck size={48} className="text-white"/></div><div className="space-y-3"><h3 className="text-3xl font-black italic uppercase">MINE<span className="text-blue-500">PRO</span> ELITE</h3><p className="text-[11px] text-slate-500 font-black uppercase tracking-[0.3em] opacity-60">Mining Infrastructure v3.4.1</p></div><button onClick={onClose} className="w-full bg-white text-black py-5 rounded-[1.8rem] font-black text-[11px] uppercase tracking-[0.4em] shadow-2xl">Confirm Access</button></div></div>;
+const InfoModal = ({ onClose }: any) => <div className="fixed inset-0 bg-black/98 z-[300] flex items-center justify-center p-10 text-center animate-in fade-in"><div className="max-w-xs space-y-8"><div className="w-24 h-24 bg-blue-600 rounded-[2rem] mx-auto flex items-center justify-center shadow-[0_0_50px_rgba(37,99,235,0.4)]"><ShieldCheck size={48} className="text-white"/></div><div className="space-y-3"><h3 className="text-3xl font-black italic uppercase">MINE<span className="text-blue-500">PRO</span> ELITE</h3><p className="text-[11px] text-slate-500 font-black uppercase tracking-[0.3em] opacity-60">Mining Infrastructure v3.4.1</p></div><button onClick={onClose} className="w-full bg-white text-black py-5 rounded-[1.8rem] font-black text-[11px] uppercase tracking-widest shadow-2xl">Confirm Access</button></div></div>;
 
 const SupportChatModal = ({ userId, adminId, onClose, lang, isAdminReply = false }: any) => {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const fetchMessages = useCallback(async () => {
     if (!userId || !adminId) return;
-    const { data } = await supabase.from('support_messages').select('*').or(`and(sender_id.eq.${userId},receiver_id.eq.${adminId}),and(sender_id.eq.${adminId},receiver_id.eq.${userId})`).order('created_at', { ascending: true });
+    const { data } = await supabase
+      .from('support_messages')
+      .select('*')
+      .or(`and(sender_id.eq.${userId},receiver_id.eq.${adminId}),and(sender_id.eq.${adminId},receiver_id.eq.${userId})`)
+      .order('created_at', { ascending: true });
     if (data) setMessages(data);
   }, [userId, adminId]);
 
   useEffect(() => {
     fetchMessages();
-    const sub = supabase.channel(`support-${userId}`).on('postgres_changes', { event: 'INSERT', table: 'support_messages' }, fetchMessages).subscribe();
+    const sub = supabase
+      .channel(`support-${userId}`)
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'support_messages' 
+      }, () => {
+        fetchMessages(); // Re-fetch whenever a new message is inserted in the DB
+      })
+      .subscribe();
     return () => { supabase.removeChannel(sub); };
   }, [userId, adminId, fetchMessages]);
 
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
+  useEffect(() => { 
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    } 
+  }, [messages]);
 
   const send = async () => {
-    if (!newMessage.trim() || !userId || !adminId) return;
+    if (!newMessage.trim() || !userId || !adminId || sending) return;
+    
+    setSending(true);
     const sender = isAdminReply ? adminId : userId;
     const receiver = isAdminReply ? userId : adminId;
-    const msg = newMessage; setNewMessage('');
-    await supabase.from('support_messages').insert({ sender_id: sender, receiver_id: receiver, message: msg });
+    const msgText = newMessage; 
+    setNewMessage('');
+
+    try {
+      const { error } = await supabase.from('support_messages').insert({ 
+        sender_id: sender, 
+        receiver_id: receiver, 
+        message: msgText 
+      });
+      
+      if (error) throw error;
+      
+      // Fetch immediately for instant feedback
+      await fetchMessages();
+    } catch (e) {
+      console.error("Chat error", e);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -942,8 +1182,16 @@ const SupportChatModal = ({ userId, adminId, onClose, lang, isAdminReply = false
         ))}
       </div>
       <div className="p-5 bg-[#0b0f1a] border-t border-white/5 flex gap-3 shadow-2xl pb-10">
-        <button onClick={send} className="p-4 bg-blue-600 text-white rounded-2xl shadow-xl active:scale-90 transition-all"><Send size={22}/></button>
-        <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyPress={e => e.key === 'Enter' && send()} placeholder="..." className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm text-white outline-none focus:border-blue-500/50" />
+        <button onClick={send} disabled={sending} className={`p-4 ${sending ? 'bg-slate-700' : 'bg-blue-600'} text-white rounded-2xl shadow-xl active:scale-90 transition-all`}>
+          {sending ? <Loader2 className="animate-spin" size={22}/> : <Send size={22}/>}
+        </button>
+        <input 
+          value={newMessage} 
+          onChange={e => setNewMessage(e.target.value)} 
+          onKeyPress={e => e.key === 'Enter' && send()} 
+          placeholder="..." 
+          className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm text-white outline-none focus:border-blue-500/50" 
+        />
       </div>
     </div>
   );
