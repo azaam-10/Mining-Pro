@@ -6,7 +6,8 @@ import {
   Loader2, ShieldCheck, X, Copy, Zap, Settings, RefreshCw, 
   MessageCircle, Send, LogOut, TrendingUp, Activity, Info, 
   Briefcase, History, Eye, Search, Check, XCircle, Image as ImageIcon,
-  Upload, Camera, Headphones, Calendar, ArrowUpRight, Award, Gem, Layers
+  Upload, Camera, Headphones, Calendar, ArrowUpRight, Award, Gem, Layers,
+  Info as InfoIcon, Lock, ShieldAlert, BadgeCheck
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL, REFERRAL_PERCENT } from './constants';
@@ -487,8 +488,19 @@ const RechargeModal = ({ onClose, showToast, userId, lang }: any) => {
               <input type="number" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/50 border border-white/5 p-4 rounded-2xl text-white text-center font-black text-xl italic outline-none focus:border-blue-500/50" />
             </div>
 
-            <div className="space-y-1.5">
-              <p className="text-[9px] text-slate-500 font-black uppercase px-1">{lang === 'ar' ? 'إرفاق لقطة شاشة للإثبات' : 'Proof Screenshot'}</p>
+            <div className="space-y-3">
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[9px] text-slate-500 font-black uppercase px-1">{lang === 'ar' ? 'إرفاق لقطة شاشة للإثبات' : 'Proof Screenshot'}</p>
+                <div className="flex gap-2 p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                  <InfoIcon size={14} className="text-blue-500 shrink-0" />
+                  <p className="text-[9px] text-blue-100/70 leading-relaxed italic">
+                    {lang === 'ar' 
+                      ? "يجب إرفاق لقطة شاشة واضحة من محفظتك توضح تفاصيل عملية التحويل (مكتملة) لضمان سرعة معالجة الطلب."
+                      : "Please attach a clear screenshot from your wallet showing the transfer details (Completed) for fast processing."}
+                  </p>
+                </div>
+              </div>
+
               <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
               
               {!previewImage ? (
@@ -506,6 +518,13 @@ const RechargeModal = ({ onClose, showToast, userId, lang }: any) => {
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-xl flex items-center gap-2">
+            <Lock size={12} className="text-emerald-500" />
+            <p className="text-[8px] text-emerald-200/50 uppercase font-black tracking-tighter">
+              {lang === 'ar' ? 'بروتوكول تشفير الإيداع نشط ومؤمن بالكامل' : 'Deposit encryption protocol active and fully secured'}
+            </p>
           </div>
 
           <button onClick={submit} disabled={submitting} className="w-full bg-blue-600 py-5 rounded-2xl font-black text-white text-[11px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2">
@@ -560,6 +579,16 @@ const WithdrawModal = ({ onClose, userData, userId, showToast, lang }: any) => {
             <input placeholder="0x..." value={address} onChange={e => setAddress(e.target.value)} className="w-full bg-black/50 border border-white/5 p-4 rounded-2xl text-[11px] text-white font-mono outline-none" />
             <input type="number" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/50 border border-white/5 p-4 rounded-2xl text-center text-white font-black text-xl italic outline-none" />
           </div>
+
+          <div className="flex items-center gap-2 p-3 bg-blue-500/5 rounded-xl border border-blue-500/10">
+            <ShieldAlert size={14} className="text-blue-500 shrink-0" />
+            <p className="text-[8px] text-blue-200/60 leading-relaxed italic">
+              {lang === 'ar' 
+                ? "عمليات السحب تتم مراجعتها بدقة لضمان أمان حسابك وأموالك. تتم المعالجة عادةً في غضون وقت قصير."
+                : "Withdrawals are strictly reviewed to ensure account security. Processing usually completes within a short time frame."}
+            </p>
+          </div>
+
           <button onClick={submit} disabled={submitting} className="w-full bg-white text-black py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest flex justify-center items-center gap-2">
             {submitting ? <Loader2 className="animate-spin" size={18} /> : (lang === 'ar' ? 'تأكيد السحب' : 'Establish Payout') }
           </button>
@@ -583,6 +612,26 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowS
         <button onClick={onShowRecharge} className="flex-1 bg-white text-black font-black py-4 rounded-2xl text-[12px] uppercase shadow-xl active:scale-95 transition-all">{t('recharge')}</button>
         <button onClick={onShowWithdraw} className="flex-1 bg-blue-600 text-white font-black py-4 rounded-2xl text-[12px] uppercase shadow-xl active:scale-95 transition-all">{t('withdraw')}</button>
       </div>
+    </div>
+
+    {/* رسالة الطمأنينة الرئيسية */}
+    <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-[2rem] p-6 shadow-xl relative overflow-hidden group">
+       <div className="flex items-start gap-4 relative z-10">
+          <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white shrink-0 shadow-lg">
+             <BadgeCheck size={24} />
+          </div>
+          <div className="flex-1">
+             <h4 className="text-emerald-400 font-black text-xs uppercase italic tracking-wider">
+               {lang === 'ar' ? 'نظام آمن ومستقر' : 'Secure & Stable System'}
+             </h4>
+             <p className="text-[10px] text-slate-400 mt-1 leading-relaxed font-bold">
+               {lang === 'ar' 
+                 ? "أموالك وأرباحك مؤمنة بالكامل عبر بروتوكول التعدين الموزع الخاص بنا. نضمن لك سيولة مستمرة وعمليات سحب فورية." 
+                 : "Your funds and profits are fully secured through our distributed mining protocol. We guarantee continuous liquidity and instant withdrawals."}
+             </p>
+          </div>
+       </div>
+       <div className="absolute -right-5 -bottom-5 w-24 h-24 bg-emerald-500/5 blur-2xl rounded-full"></div>
     </div>
 
     <div className="bg-gradient-to-r from-blue-600/10 to-transparent border border-blue-500/20 rounded-[2rem] p-6 shadow-xl relative overflow-hidden group">
@@ -676,13 +725,13 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
                <div className="grid grid-cols-3 gap-3 relative z-10">
                   <div className="bg-black/40 border border-white/5 p-4 rounded-3xl text-center backdrop-blur-md">
                     <TrendingUp size={14} className="mx-auto mb-1.5 text-emerald-500" />
-                    <p className="text-[8px] text-slate-500 font-black uppercase mb-1">{lang === 'ar' ? 'يومي' : 'Daily'}</p>
+                    <p className="text-[8px] text-slate-500 font-black uppercase mb-1">{lang === 'ar' ? 'الربح اليومي' : 'Daily'}</p>
                     <p className="text-sm font-black text-emerald-500">+{m.dailyProfit}</p>
                   </div>
                   <div className="bg-black/40 border border-white/5 p-4 rounded-3xl text-center backdrop-blur-md">
                     <Calendar size={14} className="mx-auto mb-1.5 text-blue-500" />
                     <p className="text-[8px] text-slate-500 font-black uppercase mb-1">{lang === 'ar' ? 'المدة' : 'Cycle'}</p>
-                    <p className="text-sm font-black text-blue-400">{m.duration}D</p>
+                    <p className="text-sm font-black text-blue-400">{m.duration} {lang === 'ar' ? 'يوم' : 'Days'}</p>
                   </div>
                   <div className="bg-black/40 border border-white/5 p-4 rounded-3xl text-center backdrop-blur-md">
                     <ArrowUpRight size={14} className="mx-auto mb-1.5 text-purple-500" />
@@ -731,12 +780,12 @@ const TasksView = ({ user, onComplete, t, lang }: any) => (
            <div className="flex justify-between items-center">
               <div>
                  <p className="text-white font-black text-base uppercase italic tracking-tight">{String(m?.name)}</p>
-                 <p className="text-[10px] text-slate-500 font-bold tracking-widest mt-1">{um.remaining_days} CYCLES LEFT</p>
+                 <p className="text-[10px] text-slate-500 font-bold tracking-widest mt-1">{um.remaining_days} {lang === 'ar' ? 'أيام متبقية' : 'DAYS LEFT'}</p>
               </div>
               <p className="text-2xl font-black text-emerald-500 italic">+{Number(m?.dailyProfit).toFixed(2)}</p>
            </div>
            <button onClick={() => !isLocked && onComplete(um)} disabled={isLocked} className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all active:scale-95 shadow-xl ${isLocked ? 'bg-slate-800 text-slate-500' : 'bg-emerald-600 text-white hover:bg-emerald-500'}`}>
-              {isLocked ? 'STABILIZING...' : t('completeTask')}
+              {isLocked ? (lang === 'ar' ? 'قيد المعالجة...' : 'STABILIZING...') : t('completeTask')}
            </button>
         </div>
       );
