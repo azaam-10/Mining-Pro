@@ -171,6 +171,9 @@ const App: React.FC = () => {
 
   if (loading) return <ProtocolLoadingScreen />;
   if (!session) return <AuthView lang={lang} t={t} showToast={showToast} />;
+  
+  // Guard against null userData after session is active but data hasn't loaded or failed
+  if (!userData) return <ProtocolLoadingScreen />;
 
   return (
     <div className={`min-h-screen pb-24 ${lang === 'ar' ? 'rtl font-["Cairo"]' : 'font-sans'} bg-[#020617] text-[#f8fafc] overflow-x-hidden relative`}>
@@ -178,7 +181,7 @@ const App: React.FC = () => {
       
       {showInfo && <InfoModal lang={lang} onClose={() => setShowInfo(false)} />}
       {showRecharge && <RechargeModal lang={lang} t={t} onClose={() => setShowRecharge(false)} onDeposit={() => fetchAllUserData(session.user.id, session.user.email || '')} showToast={showToast} userId={session.user.id} />}
-      {showWithdraw && <WithdrawModal lang={lang} t={t} onClose={() => setShowWithdraw(false)} onWithdraw={() => fetchAllUserData(session.user.id, session.user.email || '')} userData={userData!} userId={session.user.id} showToast={showToast} />}
+      {showWithdraw && <WithdrawModal lang={lang} t={t} onClose={() => setShowWithdraw(false)} onWithdraw={() => fetchAllUserData(session.user.id, session.user.email || '')} userData={userData} userId={session.user.id} showToast={showToast} />}
       {showSupport && <SupportChatModal lang={lang} onClose={() => setShowSupport(false)} userId={session.user.id} adminId={adminUUID} />}
       
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-full max-w-[85%] space-y-2 pointer-events-none">
@@ -203,12 +206,12 @@ const App: React.FC = () => {
 
       <main className="max-w-md mx-auto p-4 space-y-6">
         <Routes>
-          <Route path="/" element={<HomeView user={userData!} t={t} onShowInfo={() => setShowInfo(true)} onShowRecharge={() => setShowRecharge(true)} onShowWithdraw={() => setShowWithdraw(true)} lang={lang} />} />
-          <Route path="/machines" element={<MachinesView user={userData!} onBuy={buyMachine} t={t} lang={lang} />} />
-          <Route path="/tasks" element={<TasksView user={userData!} onComplete={completeTask} t={t} lang={lang} />} />
-          <Route path="/team" element={<TeamView user={userData!} t={t} lang={lang} />} />
-          <Route path="/profile" element={<ProfileView user={userData!} t={t} lang={lang} />} />
-          <Route path="/admin" element={userData?.email === ADMIN_EMAIL ? <AdminView t={t} showToast={showToast} lang={lang} currentAdminId={session.user.id} /> : <Navigate to="/" />} />
+          <Route path="/" element={<HomeView user={userData} t={t} onShowInfo={() => setShowInfo(true)} onShowRecharge={() => setShowRecharge(true)} onShowWithdraw={() => setShowWithdraw(true)} lang={lang} />} />
+          <Route path="/machines" element={<MachinesView user={userData} onBuy={buyMachine} t={t} lang={lang} />} />
+          <Route path="/tasks" element={<TasksView user={userData} onComplete={completeTask} t={t} lang={lang} />} />
+          <Route path="/team" element={<TeamView user={userData} t={t} lang={lang} />} />
+          <Route path="/profile" element={<ProfileView user={userData} t={t} lang={lang} />} />
+          <Route path="/admin" element={userData.email === ADMIN_EMAIL ? <AdminView t={t} showToast={showToast} lang={lang} currentAdminId={session.user.id} /> : <Navigate to="/" />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
@@ -218,7 +221,7 @@ const App: React.FC = () => {
           <NavItem icon={HomeIcon} label={t('home')} active={location.pathname === '/'} onClick={() => navigate('/')} />
           <NavItem icon={Cpu} label={t('machines')} active={location.pathname === '/machines'} onClick={() => navigate('/machines')} />
           <NavItem icon={ListTodo} label={t('tasks')} active={location.pathname === '/tasks'} onClick={() => navigate('/tasks')} />
-          {userData?.email === ADMIN_EMAIL ? (
+          {userData.email === ADMIN_EMAIL ? (
             <NavItem icon={Settings} label={t('adminTool')} active={location.pathname === '/admin'} onClick={() => navigate('/admin')} />
           ) : (
             <NavItem icon={Users} label={t('team')} active={location.pathname === '/team'} onClick={() => navigate('/team')} />
@@ -238,7 +241,7 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, lang }:
         <p className="text-white/40 font-black text-[10px] uppercase tracking-widest">{t('balanceTitle')}</p>
         <button onClick={onShowInfo} className="text-blue-500 text-[10px] font-bold">INFO</button>
       </div>
-      <h2 className="text-5xl font-black text-white">{Number(user.balance).toFixed(2)}<span className="text-sm text-blue-500 ml-2">USDT</span></h2>
+      <h2 className="text-5xl font-black text-white">{(Number(user?.balance) || 0).toFixed(2)}<span className="text-sm text-blue-500 ml-2">USDT</span></h2>
       <div className="flex gap-3">
         <button onClick={onShowRecharge} className="flex-1 bg-white text-black font-black py-3 rounded-xl text-[12px] uppercase">{t('recharge')}</button>
         <button onClick={onShowWithdraw} className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl text-[12px] uppercase">{t('withdraw')}</button>
@@ -246,7 +249,7 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, lang }:
     </div>
     <div className="space-y-4">
       <h3 className="text-[10px] font-black uppercase text-slate-600 px-1">{t('history')}</h3>
-      {user.transactions.slice(0, 5).map((tx: any) => (
+      {(user?.transactions || []).slice(0, 5).map((tx: any) => (
         <div key={tx.id} className="bg-[#0b0f1a] p-4 rounded-xl flex justify-between items-center border border-white/5">
           <div className="flex gap-3 items-center">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tx.amount > 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
@@ -269,7 +272,7 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => (
     <h2 className="text-xl font-black italic uppercase text-white px-1">{t('machines')}</h2>
     <div className="space-y-6">
       {MACHINES.map(m => {
-        const owned = user.ownedMachines.some((om: any) => om.machine_id === m.id);
+        const owned = (user?.ownedMachines || []).some((om: any) => om.machine_id === m.id);
         return (
           <div key={m.id} className={`bg-[#0b0f1a] rounded-3xl p-6 border ${owned ? 'border-emerald-500/30' : 'border-white/10'} space-y-4 shadow-xl`}>
              <div className="flex justify-between items-start">
@@ -296,7 +299,7 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => (
 const TasksView = ({ user, onComplete, t, lang }: any) => (
   <div className="space-y-6 animate-in fade-in">
     <h2 className="text-xl font-black italic uppercase text-white px-1">{t('tasks')}</h2>
-    {user.ownedMachines.map((um: any) => {
+    {(user?.ownedMachines || []).map((um: any) => {
       const m = MACHINES.find(x => x.id === um.machine_id);
       const lastClaim = um.last_claim_date ? new Date(um.last_claim_date).getTime() : 0;
       const isLocked = Date.now() - lastClaim < 24 * 60 * 60 * 1000;
@@ -315,7 +318,7 @@ const TasksView = ({ user, onComplete, t, lang }: any) => (
         </div>
       );
     })}
-    {user.ownedMachines.length === 0 && <div className="py-20 text-center text-slate-600 font-bold uppercase italic text-xs">No active machines</div>}
+    {(user?.ownedMachines || []).length === 0 && <div className="py-20 text-center text-slate-600 font-bold uppercase italic text-xs">No active machines</div>}
   </div>
 );
 
@@ -325,13 +328,13 @@ const TeamView = ({ user, t, lang }: any) => (
     <div className="bg-[#0b0f1a] p-6 rounded-3xl border border-white/10 space-y-4">
        <p className="text-[10px] font-black text-slate-500 uppercase">Referral Code</p>
        <div className="flex items-center gap-3 bg-black/40 p-3 rounded-xl border border-white/5">
-          <span className="flex-1 font-mono text-white text-center tracking-widest">{user.referral_code}</span>
-          <button onClick={() => navigator.clipboard.writeText(user.referral_code)} className="p-2 bg-blue-600 rounded-lg text-white"><Copy size={16}/></button>
+          <span className="flex-1 font-mono text-white text-center tracking-widest">{user?.referral_code}</span>
+          <button onClick={() => navigator.clipboard.writeText(user?.referral_code || '')} className="p-2 bg-blue-600 rounded-lg text-white"><Copy size={16}/></button>
        </div>
        <div className="grid grid-cols-2 gap-4">
           <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
              <p className="text-[9px] font-black text-slate-500 uppercase">Earnings</p>
-             <p className="text-xl font-black text-emerald-500">{user.referralEarnings.toFixed(2)}</p>
+             <p className="text-xl font-black text-emerald-500">{(user?.referralEarnings || 0).toFixed(2)}</p>
           </div>
           <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
              <p className="text-[9px] font-black text-slate-500 uppercase">Comm</p>
@@ -346,16 +349,16 @@ const ProfileView = ({ user, t, lang }: any) => (
   <div className="space-y-6 animate-in fade-in">
     <div className="p-6 bg-[#0b0f1a] border border-white/10 rounded-3xl shadow-xl flex items-center gap-4">
        <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center p-2">
-          <img src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user.id}`} className="w-full h-full" alt="avatar"/>
+          <img src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user?.id || 'default'}`} className="w-full h-full" alt="avatar"/>
        </div>
        <div>
-          <h3 className="text-xl font-black text-white italic">{user.first_name} {user.last_name}</h3>
-          <p className="text-[10px] text-blue-500 font-mono">{user.email}</p>
+          <h3 className="text-xl font-black text-white italic">{user?.first_name} {user?.last_name}</h3>
+          <p className="text-[10px] text-blue-500 font-mono">{user?.email}</p>
        </div>
     </div>
     <div className="grid grid-cols-2 gap-4">
-       <div className="bg-[#0b0f1a] p-4 rounded-2xl border border-white/5"><p className="text-[9px] text-slate-600 uppercase font-black">Total In</p><p className="text-xl font-black text-emerald-500">{user.totalRecharge.toFixed(2)}</p></div>
-       <div className="bg-[#0b0f1a] p-4 rounded-2xl border border-white/5"><p className="text-[9px] text-slate-600 uppercase font-black">Total Out</p><p className="text-xl font-black text-red-500">{user.totalWithdraw.toFixed(2)}</p></div>
+       <div className="bg-[#0b0f1a] p-4 rounded-2xl border border-white/5"><p className="text-[9px] text-slate-600 uppercase font-black">Total In</p><p className="text-xl font-black text-emerald-500">{(user?.totalRecharge || 0).toFixed(2)}</p></div>
+       <div className="bg-[#0b0f1a] p-4 rounded-2xl border border-white/5"><p className="text-[9px] text-slate-600 uppercase font-black">Total Out</p><p className="text-xl font-black text-red-500">{(user?.totalWithdraw || 0).toFixed(2)}</p></div>
     </div>
   </div>
 );
@@ -515,9 +518,9 @@ const WithdrawModal = ({ onClose, userData, userId, showToast, lang }: any) => {
   const [address, setAddress] = useState('');
   const submit = async () => {
     const amt = Number(amount);
-    if (amt < MIN_WITHDRAWAL || amt > userData.withdrawableBalance) return showToast("Invalid amount", "error");
+    if (amt < MIN_WITHDRAWAL || amt > (userData?.withdrawableBalance || 0)) return showToast("Invalid amount", "error");
     await supabase.from('transactions').insert({ user_id: userId, type: 'withdrawal', amount: -amt, status: 'pending' });
-    await supabase.from('profiles').update({ balance: Number(userData.balance) - amt, withdrawable_balance: Number(userData.withdrawableBalance) - amt }).eq('id', userId);
+    await supabase.from('profiles').update({ balance: Number(userData?.balance || 0) - amt, withdrawable_balance: Number(userData?.withdrawableBalance || 0) - amt }).eq('id', userId);
     showToast("Withdrawal pending", "success"); onClose();
   };
   return (
