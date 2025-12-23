@@ -1087,11 +1087,57 @@ const AuthView = ({ lang, t, showToast }: any) => {
                 <button type="button" onClick={() => setIsLogin(true)} className={`flex-1 py-3 rounded-xl text-[11px] font-black transition-all ${isLogin ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-600'}`}>LOGIN</button>
                 <button type="button" onClick={() => setIsLogin(false)} className={`flex-1 py-3 rounded-xl text-[11px] font-black transition-all ${!isLogin ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-600'}`}>JOIN</button>
              </div>
-             {!isLogin && <input placeholder="First Name" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} className="w-full bg-[#020617] border border-white/5 p-4 rounded-2xl text-xs text-white outline-none focus:border-blue-500/50" required />}
-             <input placeholder="Email Node" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-[#020617] border border-white/5 p-4 rounded-2xl text-xs text-white outline-none focus:border-blue-500/50" required />
-             <input type="password" placeholder="Cipher" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full bg-[#020617] border border-white/5 p-4 rounded-2xl text-xs text-white outline-none focus:border-blue-500/50" required />
+             
+             <div className="space-y-4">
+                {/* Name Field (Visible only on Join) */}
+                {!isLogin && (
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest px-1">
+                      {lang === 'ar' ? 'الاسم الكامل' : 'Full Name'}
+                    </label>
+                    <input 
+                      placeholder={lang === 'ar' ? 'أدخل اسمك هنا' : 'Enter your name'} 
+                      value={formData.firstName} 
+                      onChange={e => setFormData({...formData, firstName: e.target.value})} 
+                      className="w-full bg-[#020617] border border-white/5 p-4 rounded-2xl text-xs text-white outline-none focus:border-blue-500/50" 
+                      required 
+                    />
+                  </div>
+                )}
+
+                {/* Email Field */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest px-1">
+                    {lang === 'ar' ? 'البريد الإلكتروني' : 'Email Address'}
+                  </label>
+                  <input 
+                    placeholder={lang === 'ar' ? 'example@mail.com' : 'example@mail.com'} 
+                    type="email" 
+                    value={formData.email} 
+                    onChange={e => setFormData({...formData, email: e.target.value})} 
+                    className="w-full bg-[#020617] border border-white/5 p-4 rounded-2xl text-xs text-white outline-none focus:border-blue-500/50" 
+                    required 
+                  />
+                </div>
+
+                {/* Password Field */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest px-1">
+                    {lang === 'ar' ? 'كلمة السر' : 'Password'}
+                  </label>
+                  <input 
+                    type="password" 
+                    placeholder="••••••••" 
+                    value={formData.password} 
+                    onChange={e => setFormData({...formData, password: e.target.value})} 
+                    className="w-full bg-[#020617] border border-white/5 p-4 rounded-2xl text-xs text-white outline-none focus:border-blue-500/50" 
+                    required 
+                  />
+                </div>
+             </div>
+
              <button disabled={authLoading} className="w-full bg-white text-black font-black py-5 rounded-2xl text-[11px] uppercase tracking-[0.2em] shadow-2xl active:scale-95 flex justify-center items-center gap-2 mt-4">
-                {authLoading ? <Loader2 className="animate-spin" size={18} /> : 'Uplink active'}
+                {authLoading ? <Loader2 className="animate-spin" size={18} /> : (isLogin ? 'INITIALIZE LOGIN' : 'CREATE ACCOUNT')}
              </button>
           </form>
        </div>
@@ -1128,7 +1174,7 @@ const SupportChatModal = ({ userId, adminId, onClose, lang, isAdminReply = false
         schema: 'public', 
         table: 'support_messages' 
       }, () => {
-        fetchMessages(); // Re-fetch whenever a new message is inserted in the DB
+        fetchMessages(); 
       })
       .subscribe();
     return () => { supabase.removeChannel(sub); };
@@ -1157,8 +1203,6 @@ const SupportChatModal = ({ userId, adminId, onClose, lang, isAdminReply = false
       });
       
       if (error) throw error;
-      
-      // Fetch immediately for instant feedback
       await fetchMessages();
     } catch (e) {
       console.error("Chat error", e);
