@@ -50,9 +50,10 @@ const App: React.FC = () => {
 
   const fetchAdminUUID = useCallback(async () => {
     try {
+      // محاولة جلب معرف المسؤول (قد يفشل للمستخدمين العاديين بسبب RLS)
       const { data } = await supabase.from('profiles').select('id').eq('email', ADMIN_EMAIL).maybeSingle();
       if (data) setAdminUUID(data.id);
-    } catch (e) { console.error("Admin fetch error", e); }
+    } catch (e) {}
   }, []);
 
   const fetchAllUserData = useCallback(async (userId: string, userEmail: string, isManual: boolean = false) => {
@@ -185,7 +186,7 @@ const App: React.FC = () => {
       {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
       {showRecharge && <RechargeModal onClose={() => setShowRecharge(false)} onDeposit={() => fetchAllUserData(session.user.id, session.user.email || '')} showToast={showToast} userId={session.user.id} lang={lang} />}
       {showWithdraw && <WithdrawModal onClose={() => setShowWithdraw(false)} onWithdraw={() => fetchAllUserData(session.user.id, session.user.email || '')} userData={userData} userId={session.user.id} showToast={showToast} lang={lang} />}
-      {showSupport && <SupportChatModal lang={lang} onClose={() => setShowSupport(false)} userId={session.user.id} adminId={adminUUID} />}
+      {showSupport && <SupportChatModal lang={lang} onClose={() => setShowSupport(false)} userId={session.user.id} initialAdminId={adminUUID} showToast={showToast} />}
       
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-full max-w-[85%] space-y-2 pointer-events-none">
         {toasts.map(toast => (
@@ -264,12 +265,19 @@ const AdminView = ({ t, showToast, lang, adminId }: any) => {
         if (error) throw error;
         setData(users || []);
       } else if (mainTab === 'messages') {
+        // جلب الرسائل من كافة المستخدمين لفرزها في القائمة
         const { data: msgs } = await supabase.from('support_messages').select('*').order('created_at', { ascending: false });
         const { data: users } = await supabase.from('profiles').select('id, first_name, email');
         
-        if (msgs && users && adminId) {
-          const uids = Array.from(new Set(msgs.map(m => m.sender_id === adminId ? m.receiver_id : m.sender_id))).filter(id => id !== adminId);
-          const list = uids.map(uid => {
+        if (msgs && users) {
+          // استخراج كافة معرفات المستخدمين الذين شاركوا في المحادثات
+          const uids = Array.from(new Set(msgs.map(m => m.sender_id === adminId ? m.receiver_id : m.sender_id))).filter(id => id && id !== adminId);
+          
+          // في حال وجود رسائل مرسلة "للنفس" (بروتوكول المستخدم المبتدئ)
+          const selfMsgUids = msgs.filter(m => m.sender_id === m.receiver_id).map(m => m.sender_id);
+          const allUids = Array.from(new Set([...uids, ...selfMsgUids]));
+
+          const list = allUids.map(uid => {
             const user = users.find(u => u.id === uid);
             const last = msgs.find(m => m.sender_id === uid || m.receiver_id === uid);
             return { userId: uid, name: user?.first_name || 'User', email: user?.email, lastMsg: last?.message, date: last?.created_at };
@@ -319,7 +327,7 @@ const AdminView = ({ t, showToast, lang, adminId }: any) => {
   };
 
   if (activeChatUser) {
-    return <SupportChatModal userId={activeChatUser} adminId={adminId} onClose={() => setActiveChatUser(null)} lang={lang} isAdminReply={true} />;
+    return <SupportChatModal userId={activeChatUser} initialAdminId={adminId} onClose={() => setActiveChatUser(null)} lang={lang} isAdminReply={true} showToast={showToast} />;
   }
 
   return (
@@ -1073,7 +1081,7 @@ const ProfileView = ({ user, t, lang }: any) => (
   </div>
 );
 
-const AuthView = ({ lang, t, showToast }: any) => {
+const AuthView = ({ lang, t, username, showToast }: any) => {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', password: '' });
   const [authLoading, setAuthLoading] = useState(false);
@@ -1113,7 +1121,6 @@ const AuthView = ({ lang, t, showToast }: any) => {
              </div>
              
              <div className="space-y-4">
-                {/* Name Field (Visible only on Join) */}
                 {!isLogin && (
                   <div className="space-y-1.5">
                     <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest px-1">
@@ -1128,8 +1135,6 @@ const AuthView = ({ lang, t, showToast }: any) => {
                     />
                   </div>
                 )}
-
-                {/* Email Field */}
                 <div className="space-y-1.5">
                   <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest px-1">
                     {lang === 'ar' ? 'البريد الإلكتروني' : 'Email Address'}
@@ -1143,8 +1148,6 @@ const AuthView = ({ lang, t, showToast }: any) => {
                     required 
                   />
                 </div>
-
-                {/* Password Field */}
                 <div className="space-y-1.5">
                   <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest px-1">
                     {lang === 'ar' ? 'كلمة السر' : 'Password'}
@@ -1159,7 +1162,6 @@ const AuthView = ({ lang, t, showToast }: any) => {
                   />
                 </div>
              </div>
-
              <button disabled={authLoading} className="w-full bg-white text-black font-black py-5 rounded-2xl text-[11px] uppercase tracking-[0.2em] shadow-2xl active:scale-95 flex justify-center items-center gap-2 mt-4">
                 {authLoading ? <Loader2 className="animate-spin" size={18} /> : (isLogin ? 'INITIALIZE LOGIN' : 'CREATE ACCOUNT')}
              </button>
@@ -1173,26 +1175,76 @@ const ProtocolLoadingScreen = () => <div className="min-h-screen bg-[#020617] fl
 const NavItem = ({ icon: Icon, label, active, onClick }: any) => <button onClick={onClick} className={`flex flex-col items-center gap-2 transition-all duration-300 relative ${active ? 'text-blue-500 scale-110' : 'text-slate-700 opacity-40 hover:opacity-100 hover:scale-105'}`}><Icon size={22}/><span className="text-[8px] font-black uppercase tracking-[0.2em]">{label}</span></button>;
 const InfoModal = ({ onClose }: any) => <div className="fixed inset-0 bg-black/98 z-[300] flex items-center justify-center p-10 text-center animate-in fade-in"><div className="max-w-xs space-y-8"><div className="w-24 h-24 bg-blue-600 rounded-[2rem] mx-auto flex items-center justify-center shadow-[0_0_50px_rgba(37,99,235,0.4)]"><ShieldCheck size={48} className="text-white"/></div><div className="space-y-3"><h3 className="text-3xl font-black italic uppercase">MINE<span className="text-blue-500">PRO</span> ELITE</h3><p className="text-[11px] text-slate-500 font-black uppercase tracking-[0.3em] opacity-60">Mining Infrastructure v3.4.1</p></div><button onClick={onClose} className="w-full bg-white text-black py-5 rounded-[1.8rem] font-black text-[11px] uppercase tracking-widest shadow-2xl">Confirm Access</button></div></div>;
 
-const SupportChatModal = ({ userId, adminId, onClose, lang, isAdminReply = false }: any) => {
+const SupportChatModal = ({ userId, initialAdminId, onClose, lang, isAdminReply = false, showToast }: any) => {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [adminId, setAdminId] = useState<string | null>(initialAdminId);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // وظيفة لجلب معرف المسؤول بشكل مستقل في حال عدم توفره
+  const ensureAdminId = useCallback(async () => {
+    if (adminId) return adminId;
+    
+    // محاولة جلب المعرّف من تاريخ الرسائل (الأكثر موثوقية للمستخدم العادي)
+    try {
+      const { data } = await supabase
+        .from('support_messages')
+        .select('sender_id, receiver_id')
+        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+        .limit(20);
+      
+      if (data && data.length > 0) {
+        const foundId = data.map(m => m.sender_id === userId ? m.receiver_id : m.sender_id)
+                           .find(id => id && id !== userId);
+        if (foundId) {
+          setAdminId(foundId);
+          return foundId;
+        }
+      }
+    } catch (e) {}
+
+    // محاولة أخيرة من جدول الملفات (قد يفشل بسبب RLS)
+    try {
+      const { data } = await supabase.from('profiles').select('id').eq('email', ADMIN_EMAIL).maybeSingle();
+      if (data) {
+        setAdminId(data.id);
+        return data.id;
+      }
+    } catch (e) {}
+
+    return null;
+  }, [adminId, userId]);
+
   const fetchMessages = useCallback(async () => {
-    if (!userId || !adminId) return;
-    const { data } = await supabase
-      .from('support_messages')
-      .select('*')
-      .or(`and(sender_id.eq.${userId},receiver_id.eq.${adminId}),and(sender_id.eq.${adminId},receiver_id.eq.${userId})`)
-      .order('created_at', { ascending: true });
-    if (data) setMessages(data);
+    if (!userId) return;
+    try {
+      // استعلام مرن يجلب كافة الرسائل المتعلقة بالمستخدم
+      const { data, error } = await supabase
+        .from('support_messages')
+        .select('*')
+        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+        .order('created_at', { ascending: true });
+      
+      if (error) throw error;
+      if (data) {
+        setMessages(data);
+        if (!adminId) {
+          const otherId = data.map(m => m.sender_id === userId ? m.receiver_id : m.sender_id)
+                             .find(id => id && id !== userId);
+          if (otherId) setAdminId(otherId);
+        }
+      }
+    } catch (e) {
+      console.error("Fetch error", e);
+    }
   }, [userId, adminId]);
 
   useEffect(() => {
     fetchMessages();
-    const sub = supabase
-      .channel(`support-${userId}`)
+    
+    const channel = supabase
+      .channel(`chat-room-${userId}`)
       .on('postgres_changes', { 
         event: 'INSERT', 
         schema: 'public', 
@@ -1201,8 +1253,13 @@ const SupportChatModal = ({ userId, adminId, onClose, lang, isAdminReply = false
         fetchMessages(); 
       })
       .subscribe();
-    return () => { supabase.removeChannel(sub); };
-  }, [userId, adminId, fetchMessages]);
+
+    const intervalId = setInterval(fetchMessages, 5000);
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(intervalId);
+    };
+  }, [userId, fetchMessages]);
 
   useEffect(() => { 
     if (scrollRef.current) {
@@ -1211,25 +1268,31 @@ const SupportChatModal = ({ userId, adminId, onClose, lang, isAdminReply = false
   }, [messages]);
 
   const send = async () => {
-    if (!newMessage.trim() || !userId || !adminId || sending) return;
+    const msgText = newMessage.trim();
+    if (!msgText || !userId || sending) return;
     
     setSending(true);
-    const sender = isAdminReply ? adminId : userId;
-    const receiver = isAdminReply ? userId : adminId;
-    const msgText = newMessage; 
     setNewMessage('');
 
     try {
+      let currentAdminId = await ensureAdminId();
+      
+      // في حال كان المستخدم مبتدئاً ولا يوجد تاريخ رسائل، نرسل الرسالة لنفس المستخدم
+      // وسيقوم المسؤول بالتقاطها من سجلات "الرسائل الموجهة للذات" (بروتوكول النداء الأول)
+      const targetReceiverId = isAdminReply ? userId : (currentAdminId || userId);
+      const targetSenderId = isAdminReply ? (currentAdminId || userId) : userId;
+
       const { error } = await supabase.from('support_messages').insert({ 
-        sender_id: sender, 
-        receiver_id: receiver, 
+        sender_id: targetSenderId, 
+        receiver_id: targetReceiverId, 
         message: msgText 
       });
       
       if (error) throw error;
-      await fetchMessages();
-    } catch (e) {
+      await fetchMessages(); 
+    } catch (e: any) {
       console.error("Chat error", e);
+      showToast(lang === 'ar' ? "فشل الإرسال: " + e.message : "Send failed: " + e.message, "error");
     } finally {
       setSending(false);
     }
@@ -1242,13 +1305,25 @@ const SupportChatModal = ({ userId, adminId, onClose, lang, isAdminReply = false
         <h3 className="font-black text-white italic tracking-widest uppercase">{isAdminReply ? 'Client Terminal' : 'Support Node'}</h3>
         <div className="w-10"></div>
       </div>
+      
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-7 space-y-5 no-scrollbar bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${((isAdminReply && m.sender_id === adminId) || (!isAdminReply && m.sender_id === userId)) ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] p-4 rounded-[1.5rem] text-[12px] font-black shadow-2xl ${((isAdminReply && m.sender_id === adminId) || (!isAdminReply && m.sender_id === userId)) ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white/10 text-slate-200 rounded-tl-none border border-white/5'}`}>{String(m.message)}</div>
+        {messages.map((m, i) => {
+          // تمييز رسائل المستخدم عن رسائل النظام/المسؤول
+          const isMe = m.sender_id === userId;
+          return (
+            <div key={m.id || i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[85%] p-4 rounded-[1.5rem] text-[12px] font-black shadow-2xl ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white/10 text-slate-200 rounded-tl-none border border-white/5'}`}>{String(m.message)}</div>
+            </div>
+          );
+        })}
+        {messages.length === 0 && (
+          <div className="text-center py-20 opacity-20 space-y-4">
+             <MessageCircle size={48} className="mx-auto" />
+             <p className="text-[10px] font-black uppercase tracking-widest">{lang === 'ar' ? 'ابدأ المحادثة الآن' : 'No Messages Yet'}</p>
           </div>
-        ))}
+        )}
       </div>
+
       <div className="p-5 bg-[#0b0f1a] border-t border-white/5 flex gap-3 shadow-2xl pb-10">
         <button onClick={send} disabled={sending} className={`p-4 ${sending ? 'bg-slate-700' : 'bg-blue-600'} text-white rounded-2xl shadow-xl active:scale-90 transition-all`}>
           {sending ? <Loader2 className="animate-spin" size={22}/> : <Send size={22}/>}
@@ -1257,7 +1332,7 @@ const SupportChatModal = ({ userId, adminId, onClose, lang, isAdminReply = false
           value={newMessage} 
           onChange={e => setNewMessage(e.target.value)} 
           onKeyPress={e => e.key === 'Enter' && send()} 
-          placeholder="..." 
+          placeholder={lang === 'ar' ? 'اكتب رسالتك...' : 'Type message...'} 
           className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm text-white outline-none focus:border-blue-500/50" 
         />
       </div>
