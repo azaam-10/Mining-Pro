@@ -2,7 +2,7 @@
 import { Machine, Translations } from './types';
 
 export const ADMIN_EMAIL = "rwanatiya3@gmail.com";
-export const DEPOSIT_ADDRESS = "0xad24e7fcbbde3ca422d58d739c3f628fd7b0e03d";
+export const DEPOSIT_ADDRESS = "0xa24769407ae6635466dae7e6f2c2cee08b181158";
 export const NETWORK = "BEP20 (BSC)";
 export const MIN_WITHDRAWAL = 8;
 export const REFERRAL_PERCENT = 0.10;
@@ -58,7 +58,7 @@ const generateMachines = (): Machine[] => {
     } else if (price <= 10000) {
       name = `GOLDEN QUANTUM`;
       color = "from-purple-500/20 to-purple-600/40";
-    } else if (price <= 100000) {
+    } else if (price <= 10000) {
       name = `PLATINUM NEBULA`;
       color = "from-orange-500/20 to-orange-600/40";
     } else {
