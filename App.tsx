@@ -7,7 +7,8 @@ import {
   MessageCircle, Send, LogOut, TrendingUp, Activity, Info, 
   History, ArrowUpRight, Award, Layers,
   ExternalLink, Calendar, AlertCircle, Headphones, Plus, Minus, Lock, Image as ImageIcon,
-  Coins, Shield, BadgeCheck, LifeBuoy, Search, CheckCircle2, Mail, Clock, StickyNote, Bookmark
+  Coins, Shield, BadgeCheck, LifeBuoy, Search, CheckCircle2, Mail, Clock, StickyNote, Bookmark,
+  Sparkles, ZapOff, Database, ChevronRight, CheckCircle
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL, REFERRAL_PERCENT, NETWORK } from './constants';
@@ -33,6 +34,7 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [userData, setUserData] = useState<UserState | null>(null);
   const [adminUUID, setAdminUUID] = useState<string | null>(null);
+  const [celebration, setCelebration] = useState<{ amount: number } | null>(null);
 
   const showToast = useCallback((message: any, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now();
@@ -123,7 +125,10 @@ const App: React.FC = () => {
     try {
       await supabase.from('user_machines').update({ last_claim_date: new Date().toISOString(), total_earned: (um.total_earned || 0) + machine.dailyProfit, remaining_days: Math.max(0, um.remaining_days - 1) }).eq('id', um.id);
       await supabase.from('profiles').update({ balance: Number(userData.balance) + machine.dailyProfit, withdrawable_balance: Number(userData.withdrawableBalance) + machine.dailyProfit }).eq('id', session.user.id);
-      showToast("Success", "success");
+      
+      setCelebration({ amount: machine.dailyProfit });
+      setTimeout(() => setCelebration(null), 3000);
+      
       fetchAllUserData(session.user.id, session.user.email!);
     } catch (e) { showToast(e, "error"); }
     finally { setIsProcessing(false); }
@@ -139,6 +144,22 @@ const App: React.FC = () => {
     <div className={`min-h-screen pb-24 ${lang === 'ar' ? 'rtl font-["Cairo"]' : 'font-sans'} bg-[#020617] text-[#f8fafc] overflow-x-hidden relative`}>
       {isProcessing && <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}
       
+      {celebration && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center pointer-events-none overflow-hidden">
+          <div className="absolute inset-0 bg-blue-500/20 animate-pulse"></div>
+          <div className="relative animate-in zoom-in duration-500 flex flex-col items-center gap-4">
+             <div className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.8)]">
+                <Zap size={48} className="text-white fill-current" />
+             </div>
+             <div className="text-center">
+                <p className="text-emerald-400 font-black text-xl uppercase tracking-widest">{lang === 'ar' ? 'تم الحصاد بنجاح' : 'HARVEST SUCCESS'}</p>
+                <p className="text-white font-black text-6xl italic">+{celebration.amount.toFixed(2)}</p>
+                <p className="text-blue-500 font-black text-sm uppercase tracking-[0.3em] mt-1">USDT PROCESSED</p>
+             </div>
+          </div>
+        </div>
+      )}
+
       {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
       {showRecharge && <RechargeModal onClose={() => setShowRecharge(false)} onDeposit={() => fetchAllUserData(session.user.id, session.user.email || '')} showToast={showToast} userId={session.user.id} lang={lang} />}
       {showWithdraw && <WithdrawModal onClose={() => setShowWithdraw(false)} onWithdraw={() => fetchAllUserData(session.user.id, session.user.email || '')} userData={userData} userId={session.user.id} showToast={showToast} lang={lang} />}
@@ -300,7 +321,7 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowS
   );
 };
 
-// --- Revamped Admin View Components ---
+// --- Admin View ---
 
 const AdminView = ({ adminId, t, showToast, lang }: any) => {
   const [mainTab, setMainTab] = useState<'deposit' | 'messages' | 'withdraw' | 'members'>('deposit');
@@ -480,8 +501,6 @@ const AdminView = ({ adminId, t, showToast, lang }: any) => {
   );
 };
 
-// --- REDESIGNED USER DETAILS MODAL (CLIENT PROFILE) ---
-
 const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
   const [u, setU] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -515,7 +534,6 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
       
       if (error) throw error;
       
-      // Log as a transaction for the user to see with the note
       await supabase.from('transactions').insert({
         user_id: userId,
         type: op === 'add' ? 'deposit' : 'withdrawal',
@@ -537,8 +555,6 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
   return (
     <div className="fixed inset-0 z-[250] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
        <div className="bg-[#0b1424] w-full max-w-md rounded-[3rem] border border-white/5 flex flex-col relative overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)] max-h-[90vh]">
-          
-          {/* Header */}
           <div className="p-8 pb-4 text-center relative border-b border-white/5">
              <button onClick={onClose} className="absolute top-8 right-8 p-2.5 bg-white/5 rounded-2xl text-slate-500 hover:text-white transition-all"><X size={20}/></button>
              <h3 className="text-white font-black text-xl italic uppercase tracking-widest">ملف العميل</h3>
@@ -546,7 +562,6 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
           </div>
 
           <div className="flex-1 overflow-y-auto no-scrollbar p-8 space-y-7">
-             {/* User Info Section */}
              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                    <div className="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center text-blue-500">
@@ -557,7 +572,6 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
                 <div className="w-16 h-16 bg-blue-600 rounded-[1.2rem] flex items-center justify-center text-white text-3xl font-black italic shadow-[0_0_20px_rgba(37,99,235,0.4)]">?</div>
              </div>
 
-             {/* Stats Grid - MATCHES SCREENSHOT */}
              <div className="grid grid-cols-2 gap-4">
                 <ProfileStatCard label="WITHDRAWABLE" value={u.withdrawable_balance.toFixed(2)} color="text-blue-500" />
                 <ProfileStatCard label="TOTAL BALANCE" value={u.balance.toFixed(2)} color="text-white" />
@@ -565,7 +579,6 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
                 <ProfileStatCard label="TOTAL DEPOSIT" value={u.total_recharge.toFixed(2)} color="text-emerald-500" />
              </div>
 
-             {/* Footer Info Bar */}
              <div className="bg-black/40 p-4 rounded-[1.5rem] border border-white/5 flex justify-between items-center">
                 <div className="flex items-center gap-2">
                    <Clock size={14} className="text-slate-500" />
@@ -577,7 +590,6 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
                 </div>
              </div>
 
-             {/* Modification Controls - Balance Add/Sub */}
              <div className="space-y-4 pt-2">
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">تعديل الرصيد (إرسال / سحب)</p>
                 <div className="space-y-2">
@@ -592,7 +604,6 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
                 </div>
              </div>
 
-             {/* Active Machines Section */}
              <div className="space-y-4">
                 <div className="flex items-center justify-end gap-2 text-blue-500">
                    <h4 className="text-[11px] font-black uppercase italic">الماكينات النشطة</h4>
@@ -618,7 +629,6 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
                 </div>
              </div>
 
-             {/* Full History Section Placeholder */}
              <div className="space-y-4 pt-4">
                 <div className="flex items-center justify-end gap-2 text-blue-500">
                    <h4 className="text-[11px] font-black uppercase italic">سجل العمليات الكامل</h4>
@@ -647,27 +657,19 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
     <div className="space-y-6 pb-10">
       {MACHINES.map(m => (
         <div key={m.id} className={`bg-[#0b1424] p-8 rounded-[2.5rem] border border-blue-500/20 space-y-7 shadow-2xl relative overflow-hidden group`}>
-           {/* Top Section */}
            <div className="flex justify-between items-start">
-              {/* Price on the left */}
               <div className="flex flex-col items-start">
                  <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest mb-1">السعر</p>
                  <p className="text-3xl font-black text-white italic tracking-tighter shimmer-effect">{m.price}<span className="text-xs opacity-60 ml-0.5 not-italic uppercase">U</span></p>
               </div>
-              
-              {/* Name & Status in the middle/right */}
               <div className="text-right flex flex-col items-end gap-1">
                  <h4 className="text-white font-black text-lg italic uppercase tracking-tighter">{m.name}</h4>
                  <p className="text-[8px] text-blue-500 font-black uppercase tracking-widest">{m.description}</p>
               </div>
-
-              {/* Icon on the right */}
               <div className="w-12 h-14 bg-slate-800/50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-blue-500 transition-colors">
                  <Bookmark size={24} className="fill-current" />
               </div>
            </div>
-
-           {/* Stats Grid - 3 boxes */}
            <div className="grid grid-cols-3 gap-2">
               <div className="bg-black/40 p-3 py-5 rounded-[1.8rem] border border-white/5 text-center space-y-2 relative overflow-hidden">
                  <div className="w-6 h-6 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-500 mx-auto">
@@ -676,7 +678,6 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
                  <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">الإجمالي</p>
                  <p className="text-xs font-black text-rose-500 italic">{(m.dailyProfit * m.duration).toFixed(2)}+</p>
               </div>
-
               <div className="bg-black/40 p-3 py-5 rounded-[1.8rem] border border-white/5 text-center space-y-2">
                  <div className="w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 mx-auto">
                     <Calendar size={14} />
@@ -684,7 +685,6 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
                  <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">المدة</p>
                  <p className="text-xs font-black text-blue-500 italic">{m.duration} يوم</p>
               </div>
-
               <div className="bg-black/40 p-3 py-5 rounded-[1.8rem] border border-white/5 text-center space-y-2">
                  <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 mx-auto">
                     <Activity size={14} />
@@ -693,8 +693,6 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
                  <p className="text-xs font-black text-emerald-500 italic">{m.dailyProfit}+</p>
               </div>
            </div>
-
-           {/* Bottom Button */}
            <button onClick={() => onBuy(m)} className="w-full bg-[#065f46]/30 border border-emerald-500/20 py-5 rounded-[2rem] font-black text-emerald-400 uppercase tracking-widest flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg hover:bg-[#065f46]/50">
               NODE STABLE
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_#10b981]"></div>
@@ -705,29 +703,146 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
   );
 };
 
+// --- REDESIGNED TASKS VIEW ---
+
 const TasksView = ({ user, onComplete, t, lang }: any) => {
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  
+  useEffect(() => {
+    const itv = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(itv);
+  }, []);
+
+  const todayEarnings = user.transactions
+    .filter((tx: any) => tx.type === 'deposit' && tx.status === 'completed' && new Date(tx.date).toDateString() === new Date().toDateString())
+    .reduce((acc: number, tx: any) => acc + Number(tx.amount), 0);
+
   return (
-    <div className="space-y-4 pb-10">
-      {user.ownedMachines.length === 0 ? (
-        <div className="bg-[#0b0f1a] p-10 rounded-[2rem] border border-white/5 text-center">
-           <p className="text-slate-700 font-black uppercase text-[10px] tracking-widest">No nodes connected</p>
-        </div>
-      ) : user.ownedMachines.map((um: UserMachine) => {
-        const m = MACHINES.find(mach => mach.id === um.machine_id);
-        const lastClaim = um.last_claim_date ? new Date(um.last_claim_date).getTime() : 0;
-        const canClaim = Date.now() - lastClaim >= 24 * 60 * 60 * 1000;
-        return (
-          <div key={um.id} className="bg-[#0b0f1a] p-6 rounded-[2rem] border border-white/5 flex justify-between items-center shadow-xl">
-             <div>
-                <h4 className="text-white font-black text-xs uppercase italic">{m?.name}</h4>
-                <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">Remaining: {um.remaining_days} days</p>
+    <div className="space-y-6 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      {/* Tasks Summary Header */}
+      <div className="bg-gradient-to-br from-[#0f172a] to-[#020617] p-7 rounded-[2.5rem] border border-white/5 space-y-5 shadow-2xl relative overflow-hidden group">
+         <div className="absolute top-0 right-0 p-4 opacity-5 rotate-12 group-hover:rotate-45 transition-transform duration-700">
+            <Sparkles size={120} />
+         </div>
+         <div className="flex justify-between items-center relative z-10">
+            <div className="space-y-1">
+               <h3 className="text-white font-black text-xl italic uppercase tracking-tighter">{lang === 'ar' ? 'مركز الحصاد' : 'HARVEST CENTER'}</h3>
+               <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">OPERATIONAL STATUS: ACTIVE</p>
+            </div>
+            <div className="w-14 h-14 bg-blue-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-[0_0_30px_rgba(37,99,235,0.3)]">
+               <ListTodo size={32} />
+            </div>
+         </div>
+         <div className="grid grid-cols-2 gap-4 relative z-10">
+            <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+               <p className="text-[8px] text-slate-500 font-black uppercase mb-1">{lang === 'ar' ? 'أرباح اليوم' : 'TODAY EARNED'}</p>
+               <p className="text-xl font-black text-emerald-500 italic">{todayEarnings.toFixed(2)} <span className="text-[10px]">USDT</span></p>
+            </div>
+            <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+               <p className="text-[8px] text-slate-500 font-black uppercase mb-1">{lang === 'ar' ? 'العقد النشط' : 'ACTIVE NODES'}</p>
+               <p className="text-xl font-black text-blue-500 italic">{user.ownedMachines.length} <span className="text-[10px]">NODES</span></p>
+            </div>
+         </div>
+      </div>
+
+      {/* Nodes List */}
+      <div className="space-y-4">
+        {user.ownedMachines.length === 0 ? (
+          <div className="bg-[#0b0f1a] p-12 rounded-[3rem] border border-white/5 text-center space-y-4">
+             <div className="w-20 h-20 bg-slate-800/20 rounded-full flex items-center justify-center mx-auto opacity-30">
+                <ZapOff size={40} className="text-slate-500" />
              </div>
-             <button onClick={() => onComplete(um)} disabled={!canClaim} className={`px-8 py-4 rounded-2xl font-black text-[10px] uppercase transition-all shadow-xl ${canClaim ? 'bg-emerald-600 text-white active:scale-95' : 'bg-white/5 text-slate-700'}`}>
-                {canClaim ? t('completeTask') : 'Wait'}
-             </button>
+             <div>
+                <p className="text-white font-black text-sm uppercase italic">{lang === 'ar' ? 'لا توجد عقد نشطة' : 'NO ACTIVE NODES'}</p>
+                <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest mt-1">Visit the mining store to get started</p>
+             </div>
           </div>
-        );
-      })}
+        ) : user.ownedMachines.map((um: UserMachine) => {
+          const m = MACHINES.find(mach => mach.id === um.machine_id);
+          const lastClaim = um.last_claim_date ? new Date(um.last_claim_date).getTime() : 0;
+          const diff = currentTime - lastClaim;
+          const cooldown = 24 * 60 * 60 * 1000;
+          const canClaim = diff >= cooldown;
+          
+          const progress = Math.min(100, (diff / cooldown) * 100);
+          
+          return (
+            <div key={um.id} className={`bg-[#0b1424] p-7 rounded-[2.5rem] border ${canClaim ? 'border-emerald-500/20' : 'border-white/5'} transition-all duration-500 space-y-6 shadow-xl relative overflow-hidden group`}>
+               {canClaim && (
+                 <div className="absolute top-0 right-0 p-2">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></div>
+                 </div>
+               )}
+               
+               <div className="flex justify-between items-start relative z-10">
+                  <div className="flex items-center gap-4">
+                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${canClaim ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-800/20 text-slate-600'}`}>
+                        <Database size={28} />
+                     </div>
+                     <div>
+                        <h4 className="text-white font-black text-sm uppercase italic tracking-tight">{m?.name}</h4>
+                        <p className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] mt-0.5">{lang === 'ar' ? 'حالة التزامن:' : 'SYNC STATUS:'} {canClaim ? 'READY' : 'SYNCING...'}</p>
+                     </div>
+                  </div>
+                  <div className="text-right">
+                     <p className="text-[8px] text-slate-600 font-black uppercase mb-1">{lang === 'ar' ? 'العائد' : 'YIELD'}</p>
+                     <p className={`text-xl font-black italic ${canClaim ? 'text-emerald-500' : 'text-slate-400'}`}>+{m?.dailyProfit.toFixed(2)}</p>
+                  </div>
+               </div>
+
+               {/* Modern Progress Visualization */}
+               {!canClaim && (
+                 <div className="space-y-2">
+                    <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-slate-600">
+                       <span>{Math.floor(progress)}% COMPLETE</span>
+                       <span>{( (cooldown - diff) / (1000 * 60 * 60) ).toFixed(1)}H REMAINING</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                       <div 
+                         className="h-full bg-blue-600 transition-all duration-1000 ease-linear shadow-[0_0_10px_rgba(37,99,235,0.5)]" 
+                         style={{ width: `${progress}%` }}
+                       ></div>
+                    </div>
+                 </div>
+               )}
+
+               <button 
+                 onClick={() => onComplete(um)} 
+                 disabled={!canClaim} 
+                 className={`w-full py-5 rounded-[2rem] font-black text-[12px] uppercase tracking-[0.3em] flex items-center justify-center gap-3 transition-all duration-300 shadow-2xl relative overflow-hidden
+                   ${canClaim 
+                     ? 'bg-emerald-600 text-white active:scale-95 hover:bg-emerald-500 group' 
+                     : 'bg-white/5 text-slate-700 opacity-50'
+                   }`}
+               >
+                  {canClaim ? (
+                    <>
+                      <Sparkles size={18} className="animate-pulse" />
+                      {lang === 'ar' ? 'حصاد الأرباح' : 'HARVEST YIELD'}
+                      <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      {lang === 'ar' ? 'قيد التعدين' : 'MINING IN PROGRESS'}
+                    </>
+                  )}
+                  {canClaim && <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 skew-x-[-25deg]"></div>}
+               </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="bg-blue-600/5 p-6 rounded-[2rem] border border-blue-500/10 flex items-start gap-4">
+         <Info size={24} className="text-blue-500 shrink-0 mt-0.5" />
+         <p className="text-[10px] text-blue-100/60 font-bold leading-relaxed">
+           {lang === 'ar' 
+             ? 'يتم الحصاد مرة واحدة يومياً لكل عقد نشط. تأكد من العودة بانتظام لضمان تدفق السيولة إلى محفظتك.' 
+             : 'Harvest can be performed once daily for each active node. Be sure to return regularly to ensure liquidity flow.'}
+         </p>
+      </div>
     </div>
   );
 };
