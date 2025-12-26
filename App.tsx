@@ -7,7 +7,7 @@ import {
   MessageCircle, Send, LogOut, TrendingUp, Activity, Info, 
   History, ArrowUpRight, Award, Layers,
   ExternalLink, Calendar, AlertCircle, Headphones, Plus, Minus, Lock, Image as ImageIcon,
-  Coins, Shield, BadgeCheck, LifeBuoy
+  Coins, Shield, BadgeCheck, LifeBuoy, Search, CheckCircle2
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL, REFERRAL_PERCENT, NETWORK } from './constants';
@@ -204,7 +204,6 @@ const App: React.FC = () => {
 const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowSupport, lang }: any) => {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Top Card for Balance with 2 main buttons */}
       <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/10 p-8 rounded-[2.5rem] text-white border border-white/5 shadow-2xl relative overflow-hidden group">
          <div className="relative z-10 space-y-6">
             <div className="flex justify-between items-center">
@@ -221,7 +220,6 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowS
          </div>
       </div>
 
-      {/* Stuck Funds Card - matches the dark purple/red design in screenshot */}
       <div className="w-full bg-[#1e143b] p-7 rounded-[2.5rem] border border-white/5 flex flex-col gap-5 relative group overflow-hidden">
         <div className="flex justify-between items-start">
            <div className="flex-1 space-y-2">
@@ -238,7 +236,6 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowS
         </button>
       </div>
 
-      {/* Secure System Card - matches the green design in screenshot */}
       <div className="w-full bg-[#064e3b]/30 p-7 rounded-[2.5rem] border border-emerald-500/20 flex flex-col gap-4 relative group">
         <div className="flex justify-between items-start">
            <div className="flex-1 space-y-2">
@@ -251,7 +248,6 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowS
         </div>
       </div>
 
-      {/* Need Help Card - matches the blue card with headphone icon in screenshot */}
       <div className="w-full bg-[#0f172a] p-7 rounded-[2.5rem] border border-blue-500/10 flex flex-col gap-5 relative group">
         <div className="flex justify-between items-start">
            <div className="flex-1 space-y-2">
@@ -267,7 +263,6 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowS
         </button>
       </div>
 
-      {/* History Section */}
       <div className="space-y-4 pt-2">
          <div className="flex justify-between items-center px-1">
             <h4 className="text-[11px] font-black uppercase text-slate-600 tracking-[0.2em] italic">{t('historyTitle')}</h4>
@@ -297,78 +292,191 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowS
   );
 };
 
-const RechargeModal = ({ onClose, onDeposit, showToast, userId, lang }: any) => {
-  const [amount, setAmount] = useState('0.00');
-  const [txid, setTxid] = useState('');
-  const [proof, setProof] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+// --- Revamped Admin View Components ---
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setProof(reader.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
+const AdminView = ({ adminId, t, showToast, lang }: any) => {
+  const [mainTab, setMainTab] = useState<'deposit' | 'messages' | 'withdraw' | 'members'>('deposit');
+  const [subTab, setSubTab] = useState<'new' | 'archive'>('new');
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedUserDetails, setSelectedUserDetails] = useState<string | null>(null);
+  const [selectedChatUserId, setSelectedChatUserId] = useState<string | null>(null);
 
-  const handleSubmit = async () => {
-    if (!txid || !proof) return showToast(lang === 'ar' ? 'يرجى إدخال تفاصيل الدفع وإرفاق الصورة' : 'Enter ID and attach proof', 'error');
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      await supabase.from('transactions').insert({ user_id: userId, type: 'deposit', amount: Number(amount), status: 'pending', details: txid, proof_url: proof });
-      showToast(lang === 'ar' ? "تم إرسال الطلب بنجاح" : "Deposit protocol initiated", "success");
-      onDeposit();
-      onClose();
-    } catch (e: any) { showToast(e, "error"); }
+      if (mainTab === 'members') {
+        const { data: users } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+        setData(users || []);
+      } else if (mainTab === 'messages') {
+        // Fetch users who have sent messages or we have sent to
+        const { data: chats } = await supabase.rpc('get_admin_chat_list'); // Need a custom function or fetch manually
+        if (!chats) {
+           // Fallback manual fetch if RPC doesn't exist
+           const { data: msgs } = await supabase.from('support_messages').select('sender_id, receiver_id, message, created_at, is_read').order('created_at', { ascending: false });
+           // Logic to unique by user
+           const userMap = new Map();
+           msgs?.forEach(m => {
+             const otherId = m.sender_id === adminId ? m.receiver_id : m.sender_id;
+             if (!userMap.has(otherId)) userMap.set(otherId, m);
+           });
+           const userIds = Array.from(userMap.keys());
+           const { data: profs } = await supabase.from('profiles').select('*').in('id', userIds);
+           setData(userIds.map(id => ({ ...userMap.get(id), profiles: profs?.find(p => p.id === id) })));
+        } else {
+           setData(chats);
+        }
+      } else {
+        const typeStr = mainTab === 'deposit' ? 'deposit' : 'withdrawal';
+        let txQuery = supabase.from('transactions').select('*').eq('type', typeStr);
+        if (subTab === 'new') txQuery = txQuery.eq('status', 'pending');
+        else txQuery = txQuery.in('status', ['completed', 'failed']);
+        const { data: txs } = await txQuery.order('date', { ascending: false });
+        if (txs) {
+          const uids = txs.map(t => t.user_id);
+          const { data: profs } = await supabase.from('profiles').select('id, first_name, email').in('id', uids);
+          setData(txs.map(tx => ({ ...tx, profiles: profs?.find(p => p.id === tx.user_id) })));
+        } else setData([]);
+      }
+    } catch (e: any) { showToast(e, "error"); } 
     finally { setLoading(false); }
+  }, [mainTab, setSubTab, showToast, adminId, subTab]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleTx = async (tx: any, newStatus: 'completed' | 'failed') => {
+    try {
+      await supabase.from('transactions').update({ status: newStatus }).eq('id', tx.id);
+      if (newStatus === 'completed' && tx.type === 'deposit') {
+        const { data: p } = await supabase.from('profiles').select('*').eq('id', tx.user_id).single();
+        await supabase.from('profiles').update({ balance: Number(p.balance) + Number(tx.amount), total_recharge: Number(p.total_recharge) + Number(tx.amount) }).eq('id', tx.user_id);
+      }
+      showToast("Protocol Confirmed", "success");
+      fetchData();
+    } catch (e: any) { showToast(e, "error"); }
   };
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-5 animate-in fade-in">
-       <div className="bg-[#111827] w-full max-w-md rounded-[3rem] border border-white/10 p-8 space-y-7 relative overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-          <button onClick={onClose} className="absolute top-6 right-6 p-2.5 bg-white/5 rounded-2xl text-slate-400 hover:text-white transition-all"><X size={20}/></button>
-          
-          <div className="text-center space-y-1">
-             <h3 className="text-2xl font-black italic tracking-widest text-white uppercase">{lang === 'ar' ? 'شحن الرصيد' : 'RECHARGE'}</h3>
-             <p className="text-[10px] text-blue-500 font-black tracking-widest uppercase opacity-70">NETWORK: {NETWORK}</p>
-          </div>
+    <div className="space-y-6 animate-in fade-in duration-500">
+       {selectedUserDetails && <UserDetailsModal userId={selectedUserDetails} onClose={() => setSelectedUserDetails(null)} lang={lang} showToast={showToast} />}
+       {selectedChatUserId && <SupportChatModal lang={lang} onClose={() => setSelectedChatUserId(null)} userId={selectedChatUserId} initialAdminId={adminId} showToast={showToast} isAdminReply={true} />}
+       
+       {/* Main Tabs - matches the screenshot buttons style */}
+       <div className="bg-[#0b1424] p-3 rounded-[2rem] flex gap-2 shadow-2xl border border-white/5">
+         {[
+           {id: 'deposit', label: 'إيداع'},
+           {id: 'messages', label: 'رسائل'},
+           {id: 'withdraw', label: 'سحب'},
+           {id: 'members', label: 'أعضاء'}
+         ].map((tab: any) => (
+           <button key={tab.id} onClick={() => setMainTab(tab.id as any)} className={`flex-1 py-4 px-2 rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all duration-300 ${mainTab === tab.id ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]' : 'text-slate-500 hover:text-slate-300'}`}>{tab.label}</button>
+         ))}
+       </div>
 
-          <div className="bg-[#1f2937]/50 p-5 rounded-3xl border border-white/5 flex items-center justify-between gap-3 group">
-             <p className="text-[11px] font-mono text-blue-400 break-all select-all flex-1">{DEPOSIT_ADDRESS}</p>
-             <button onClick={() => { navigator.clipboard.writeText(DEPOSIT_ADDRESS); showToast('Address Copied', 'success'); }} className="p-2.5 bg-blue-600/20 text-blue-500 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Copy size={16}/></button>
-          </div>
+       {/* Sub Tabs for Deposit/Withdraw */}
+       {(mainTab === 'deposit' || mainTab === 'withdraw') && (
+         <div className="bg-[#0b1424] p-2 rounded-2xl flex gap-1 border border-white/5 max-w-[240px] mx-auto">
+            <button onClick={() => setSubTab('new')} className={`flex-1 py-3 px-4 rounded-xl text-[10px] font-black transition-all ${subTab === 'new' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>الجديدة</button>
+            <button onClick={() => setSubTab('archive')} className={`flex-1 py-3 px-4 rounded-xl text-[10px] font-black transition-all ${subTab === 'archive' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>الأرشيف</button>
+         </div>
+       )}
 
-          <div className="space-y-2 text-center">
-             <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{lang === 'ar' ? 'المبلغ المودع' : 'DEPOSITED AMOUNT'}</p>
-             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border-none outline-none text-4xl font-black italic text-center py-6 rounded-3xl text-white placeholder-white/20" placeholder="0.00" />
-          </div>
-
-          <div className="bg-blue-600/10 p-5 rounded-3xl border border-blue-500/20 flex items-start gap-4">
-             <Info size={24} className="text-blue-500 shrink-0 mt-1" />
-             <p className="text-[10px] text-blue-100 font-bold leading-relaxed">{lang === 'ar' ? 'يجب إرفاق لقطة شاشة واضحة من محفظتك توضح تفاصيل عملية التحويل (مكتملة) لضمان سرعة معالجة الطلب.' : 'A clear screenshot showing transfer details (Completed) is mandatory for processing.'}</p>
-          </div>
-
-          <div className="space-y-3">
-             <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest text-center">{lang === 'ar' ? 'إرفاق لقطة شاشة للإثبات' : 'ATTACH SCREENSHOT FOR PROOF'}</p>
-             <div onClick={() => fileRef.current?.click()} className="w-full h-40 bg-white/5 border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center cursor-pointer group hover:border-blue-500/50 transition-all overflow-hidden relative">
-                {proof ? <img src={proof} className="w-full h-full object-cover" /> : <>
-                  <ImageIcon size={32} className="text-slate-600 mb-2 group-hover:text-blue-500" />
-                  <p className="text-[11px] text-slate-500 font-black uppercase group-hover:text-blue-400">{lang === 'ar' ? 'اضغط لاختيار صورة' : 'Click to select image'}</p>
-                </>}
+       <div className="space-y-4">
+         {loading ? (
+            <div className="py-20 flex flex-col items-center gap-4">
+               <Loader2 className="animate-spin text-blue-500" size={40} />
+               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Synchronizing Protocol...</p>
+            </div>
+         ) : data.length === 0 ? (
+            <div className="py-20 text-center opacity-30">
+               <Activity size={48} className="mx-auto mb-4" />
+               <p className="text-[10px] font-black uppercase tracking-widest">No Active Protocol</p>
+            </div>
+         ) : data.map(item => (
+           mainTab === 'messages' ? (
+             <div key={item.profiles?.id || Math.random()} onClick={() => setSelectedChatUserId(item.profiles?.id)} className="bg-[#0b1424] p-6 rounded-[2.5rem] border border-white/5 flex items-center justify-between shadow-xl cursor-pointer hover:bg-[#151f33] transition-all group">
+               <div className="flex items-center gap-5">
+                  <div className="w-14 h-14 rounded-3xl bg-blue-600 flex items-center justify-center text-white text-xl font-black italic shadow-lg group-hover:scale-110 transition-transform">
+                     {item.profiles?.first_name?.[0] || 'U'}
+                  </div>
+                  <div>
+                    <h5 className="text-white font-black text-sm uppercase italic tracking-tight">{item.profiles?.first_name || 'User'}</h5>
+                    <p className="text-[10px] text-slate-500 font-bold truncate max-w-[150px] mt-1">{item.message || '...'}</p>
+                  </div>
+               </div>
+               <div className="text-right flex flex-col items-end gap-2">
+                  <p className="text-[9px] text-slate-600 font-bold uppercase">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                  {!item.is_read && item.receiver_id === adminId && <div className="w-2.5 h-2.5 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.8)]"></div>}
+               </div>
              </div>
-             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
-          </div>
+           ) : mainTab === 'members' ? (
+             <div key={item.id} onClick={() => setSelectedUserDetails(item.id)} className="bg-[#0b1424] p-6 rounded-[2.5rem] border border-white/5 flex items-center justify-between shadow-xl cursor-pointer hover:bg-[#151f33] transition-all">
+                <div className="flex items-center gap-5">
+                   <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-white text-lg font-black italic">
+                      {item.first_name[0]}
+                   </div>
+                   <div>
+                      <h5 className="text-white font-black text-sm uppercase italic">{item.first_name}</h5>
+                      <p className="text-[9px] text-slate-600 font-mono tracking-tighter truncate max-w-[150px]">{item.email}</p>
+                   </div>
+                </div>
+                <div className="text-right">
+                   <p className="text-lg font-black text-blue-500 italic">{(item.balance || 0).toFixed(1)}</p>
+                   <p className="text-[8px] text-slate-700 font-black uppercase">USDT</p>
+                </div>
+             </div>
+           ) : (
+             <div key={item.id} className="bg-[#0b1424] p-8 rounded-[3rem] border border-white/5 space-y-7 shadow-2xl relative overflow-hidden">
+               <div className="absolute top-0 right-0 p-3 opacity-10">
+                  <Activity size={80} className="text-blue-500" />
+               </div>
+               
+               <div className="flex justify-between items-start relative z-10">
+                 <div>
+                    <h5 className="text-white font-black text-2xl uppercase italic tracking-tighter">{item.profiles?.first_name || 'Protocol'}</h5>
+                    <p className="text-[10px] text-slate-500 font-mono tracking-widest mt-1 uppercase">{item.profiles?.email}</p>
+                 </div>
+                 <div className="text-right">
+                    <p className="text-3xl font-black text-white italic tracking-tight shimmer-effect">{Math.abs(item.amount).toFixed(2)}</p>
+                    <p className="text-[10px] text-blue-500 font-black uppercase tracking-[0.3em] mt-1">USDT</p>
+                 </div>
+               </div>
 
-          <div className="flex items-center justify-center gap-2 py-3 border-t border-white/5 opacity-50">
-             <Lock size={12} className="text-emerald-500" />
-             <p className="text-[9px] font-black uppercase text-emerald-500 tracking-tighter">{lang === 'ar' ? 'بروتوكول تشفير الإيداع نشط ومؤمن بالكامل' : 'Deposit encryption protocol fully active and secure'}</p>
-          </div>
+               {item.proof_url && (
+                 <div className="space-y-4">
+                    <div className="flex items-center gap-2 px-1">
+                       <ShieldCheck size={16} className="text-blue-500" />
+                       <h6 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Verification Proof</h6>
+                    </div>
+                    <div className="w-full h-64 rounded-[2rem] overflow-hidden border border-white/10 bg-black shadow-inner">
+                       <img src={item.proof_url} className="w-full h-full object-contain" />
+                    </div>
+                 </div>
+               )}
 
-          <button onClick={handleSubmit} disabled={loading} className="w-full bg-blue-600 py-5 rounded-[2rem] font-black text-white uppercase tracking-[0.3em] shadow-[0_10px_30px_rgba(37,99,235,0.4)] active:scale-95 transition-all">
-             {loading ? <Loader2 className="animate-spin mx-auto" /> : (lang === 'ar' ? 'تأكيد' : 'CONFIRM PROTOCOL')}
-          </button>
+               {!item.proof_url && item.type === 'withdrawal' && (
+                  <div className="bg-red-500/10 p-5 rounded-3xl border border-red-500/20">
+                     <p className="text-[10px] text-red-200 font-black uppercase tracking-widest mb-1">Target Wallet (BEP20)</p>
+                     <p className="text-xs font-mono text-white break-all select-all">{item.details}</p>
+                  </div>
+               )}
+
+               {item.status === 'pending' && (
+                 <div className="flex gap-4 pt-2 relative z-10">
+                   <button onClick={() => handleTx(item, 'completed')} className="flex-1 bg-white text-slate-900 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.2em] shadow-xl hover:scale-105 transition-all">Approve</button>
+                   <button onClick={() => handleTx(item, 'failed')} className="flex-1 bg-red-600/10 text-red-500 border border-red-500/20 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.2em] hover:bg-red-600 hover:text-white transition-all">Reject</button>
+                 </div>
+               )}
+
+               {item.status !== 'pending' && (
+                  <div className="flex items-center justify-center gap-2 py-4 border-t border-white/5 opacity-50">
+                     {item.status === 'completed' ? <CheckCircle2 className="text-emerald-500" size={16} /> : <X className="text-red-500" size={16} />}
+                     <p className={`text-[10px] font-black uppercase tracking-widest ${item.status === 'completed' ? 'text-emerald-500' : 'text-red-500'}`}>{item.status}</p>
+                  </div>
+               )}
+             </div>
+           )
+         ))}
        </div>
     </div>
   );
@@ -440,86 +548,6 @@ const InfoRow = ({ label, value }: any) => (
      <span className="text-blue-500">{value}</span>
   </div>
 );
-
-const AdminView = ({ adminId, t, showToast, lang }: any) => {
-  const [mainTab, setMainTab] = useState<'deposit' | 'withdraw' | 'members' | 'messages'>('withdraw');
-  const [subTab, setSubTab] = useState<'new' | 'archive'>('new');
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedUserDetails, setSelectedUserDetails] = useState<string | null>(null);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (mainTab === 'members') {
-        const { data: users } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-        setData(users || []);
-      } else if (mainTab === 'messages') {
-        const { data: msgs } = await supabase.from('support_messages').select('*').order('created_at', { ascending: false });
-        setData(msgs || []);
-      } else {
-        const typeStr = mainTab === 'deposit' ? 'deposit' : 'withdrawal';
-        let txQuery = supabase.from('transactions').select('*').eq('type', typeStr);
-        if (subTab === 'new') txQuery = txQuery.eq('status', 'pending');
-        else txQuery = txQuery.in('status', ['completed', 'failed']);
-        const { data: txs } = await txQuery.order('date', { ascending: false });
-        if (txs) {
-          const uids = txs.map(t => t.user_id);
-          const { data: profs } = await supabase.from('profiles').select('id, first_name, email').in('id', uids);
-          setData(txs.map(tx => ({ ...tx, profiles: profs?.find(p => p.id === tx.user_id) })));
-        } else setData([]);
-      }
-    } catch (e: any) { showToast(e, "error"); } 
-    finally { setLoading(false); }
-  }, [mainTab, subTab, showToast]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  const handleTx = async (tx: any, newStatus: 'completed' | 'failed') => {
-    try {
-      await supabase.from('transactions').update({ status: newStatus }).eq('id', tx.id);
-      if (newStatus === 'completed' && tx.type === 'deposit') {
-        const { data: p } = await supabase.from('profiles').select('*').eq('id', tx.user_id).single();
-        await supabase.from('profiles').update({ balance: Number(p.balance) + Number(tx.amount), total_recharge: Number(p.total_recharge) + Number(tx.amount) }).eq('id', tx.user_id);
-      }
-      showToast("Success", "success");
-      fetchData();
-    } catch (e: any) { showToast(e, "error"); }
-  };
-
-  return (
-    <div className="space-y-6">
-       {selectedUserDetails && <UserDetailsModal userId={selectedUserDetails} onClose={() => setSelectedUserDetails(null)} lang={lang} showToast={showToast} />}
-       <div className="bg-[#0b0f1a] p-2 rounded-2xl flex gap-1 shadow-2xl">
-         {['deposit', 'withdraw', 'members'].map((tab: any) => (
-           <button key={tab} onClick={() => setMainTab(tab as any)} className={`flex-1 py-3 px-2 rounded-xl text-[9px] font-black uppercase tracking-wider ${mainTab === tab ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>{tab}</button>
-         ))}
-       </div>
-       <div className="space-y-4">
-         {loading ? <Loader2 className="animate-spin mx-auto text-blue-500" /> : data.map(item => (
-           <div key={item.id} onClick={() => mainTab === 'members' ? setSelectedUserDetails(item.id) : null} className="bg-[#0b0f1a] p-5 rounded-[2rem] border border-white/5 space-y-4 shadow-xl">
-             <div className="flex justify-between items-start">
-               <div>
-                 <h5 className="text-white font-black text-xs uppercase italic">{item.profiles?.first_name || item.first_name || 'User'}</h5>
-                 <p className="text-[9px] text-slate-600 font-mono truncate max-w-[150px]">{item.profiles?.email || item.email}</p>
-               </div>
-               <p className="text-lg font-black text-blue-500 italic">{item.amount || item.balance || 0} <span className="text-[8px] opacity-40">USDT</span></p>
-             </div>
-             {item.proof_url && (
-               <div className="w-full h-48 rounded-2xl overflow-hidden border border-white/10"><img src={item.proof_url} className="w-full h-full object-cover" /></div>
-             )}
-             {item.status === 'pending' && (
-               <div className="flex gap-2">
-                 <button onClick={() => handleTx(item, 'completed')} className="flex-1 bg-emerald-600 py-3 rounded-xl text-[9px] font-black uppercase">Approve</button>
-                 <button onClick={() => handleTx(item, 'failed')} className="flex-1 bg-red-600/10 text-red-500 py-3 rounded-xl text-[9px] font-black uppercase">Reject</button>
-               </div>
-             )}
-           </div>
-         ))}
-       </div>
-    </div>
-  );
-};
 
 const MachinesView = ({ user, onBuy, t, lang }: any) => {
   return (
@@ -650,6 +678,79 @@ const ProtocolLoadingScreen = () => (
     <span className="font-black italic text-2xl tracking-tighter uppercase text-white animate-pulse">MINE<span className="text-blue-500">PRO</span></span>
   </div>
 );
+
+// --- Missing RechargeModal Implementation ---
+const RechargeModal = ({ onClose, onDeposit, showToast, userId, lang }: any) => {
+  const [amount, setAmount] = useState('');
+  const [proofUrl, setProofUrl] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleDeposit = async () => {
+    const amt = Number(amount);
+    if (isNaN(amt) || amt <= 0) return showToast(lang === 'ar' ? 'أدخل مبلغا صالحا' : 'Enter a valid amount', 'error');
+    if (!proofUrl) return showToast(lang === 'ar' ? 'يرجى إرفاق رابط إثبات الدفع' : 'Please provide proof URL', 'error');
+    
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('transactions').insert({
+        user_id: userId,
+        type: 'deposit',
+        amount: amt,
+        status: 'pending',
+        proof_url: proofUrl,
+        date: new Date().toISOString()
+      });
+      if (error) throw error;
+      showToast(lang === 'ar' ? "تم إرسال طلب الإيداع للمراجعة" : "Deposit requested", "success");
+      onDeposit();
+      onClose();
+    } catch (e: any) {
+      showToast(e, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in">
+       <div className="bg-[#111827] w-full max-w-md rounded-[3rem] border border-white/10 p-8 space-y-6 relative shadow-2xl">
+          <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-white/5 rounded-2xl text-slate-400 hover:text-white transition-all"><X size={20}/></button>
+          
+          <h3 className="text-2xl font-black italic text-white uppercase text-center tracking-widest">{lang === 'ar' ? 'إيداع رصيد' : 'RECHARGE'}</h3>
+          
+          <div className="bg-blue-600/10 p-6 rounded-[2rem] border border-blue-500/20 space-y-4">
+             <div className="space-y-1 text-center">
+                <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Deposit Network</p>
+                <p className="text-white font-black italic">{NETWORK}</p>
+             </div>
+             <div className="bg-black/40 p-4 rounded-2xl border border-white/5 space-y-2">
+                <p className="text-[9px] text-slate-500 font-black uppercase text-center">USDT Deposit Address</p>
+                <div className="flex items-center justify-between gap-3">
+                   <p className="text-[10px] font-mono text-blue-400 break-all select-all">{DEPOSIT_ADDRESS}</p>
+                   <button onClick={() => { navigator.clipboard.writeText(DEPOSIT_ADDRESS); showToast("Copied", "success"); }} className="p-2 bg-white/10 text-white rounded-lg shrink-0"><Copy size={14}/></button>
+                </div>
+             </div>
+          </div>
+
+          <div className="space-y-4">
+             <div className="space-y-2">
+                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest px-2">{lang === 'ar' ? 'الكمية المرسلة' : 'AMOUNT SENT (USDT)'}</p>
+                <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="10.00" className="w-full bg-[#020617]/60 border border-white/5 p-5 rounded-2xl text-white outline-none font-black italic text-xl placeholder-white/10 focus:border-blue-500/30 transition-all" />
+             </div>
+
+             <div className="space-y-2">
+                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest px-2">{lang === 'ar' ? 'رابط صورة الإثبات' : 'PROOF IMAGE URL'}</p>
+                <input value={proofUrl} onChange={e => setProofUrl(e.target.value)} placeholder="https://..." className="w-full bg-[#020617]/60 border border-white/5 p-5 rounded-2xl text-white outline-none font-mono text-sm placeholder-white/10 focus:border-blue-500/30 transition-all" />
+             </div>
+          </div>
+
+          <button onClick={handleDeposit} disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black text-[13px] uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all">
+             {loading ? <Loader2 className="animate-spin mx-auto" /> : (lang === 'ar' ? 'تأكيد الإرسال' : 'CONFIRM DEPOSIT')}
+          </button>
+       </div>
+    </div>
+  );
+};
 
 const WithdrawModal = ({ onClose, onWithdraw, userData, userId, showToast, lang }: any) => {
   const [amount, setAmount] = useState('');
