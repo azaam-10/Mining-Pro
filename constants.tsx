@@ -71,13 +71,22 @@ export const TRANSLATIONS: Translations = {
   owned: { en: "Running", ar: "نشط" },
   completeTask: { en: "Harvest", ar: "استلام" },
   supportChat: { en: "Support", ar: "الدعم الفني" },
-  stuckFunds: { en: "Stuck Funds?", ar: "هل لديك أموال عالقه؟" },
+  stuckFunds: { en: "Stuck Funds?", ar: "هل لديك أموال عالقة؟" },
   secureSystem: { en: "Secure System", ar: "نظام آمن ومستقر" },
-  needHelp: { en: "Need Help?", ar: "هل تحتاج مساعدة؟" },
+  needHelp: { en: "Need Help?", ar: "هل تحتاج إلى مساعدة؟" },
   stuckFundsDesc: { 
     en: "If you face trouble withdrawing from any platform, we are here for consultation.", 
-    ar: "إذا كنت تواجه مشكله في سحب اموالك من أي منصه مهام أخرى فنحن هنا للمساعده فريقنا المتخصص يمكنه تقديم الدعم والمشورة لاستعادة حقوقك" 
+    ar: "إذا كنت تواجه مشكلة في سحب أموالك من أي منصة مهام أخرى، فنحن هنا للمساعدة فريقنا المتخصص يمكنه تقديم الدعم والمشورة لاستعادة حقوقك." 
   },
-  secureSystemDesc: { en: "Your data is encrypted with military-grade protocols", ar: "بياناتك مشفرة بالكامل بأعلى معايير الأمان العالمية" },
-  needHelpDesc: { en: "Talk to our team 24/7 for any inquiries", ar: "تواصل مع فريقنا على مدار الساعة لأي استفسار" }
+  secureSystemDesc: { 
+    en: "Your data is encrypted with military-grade protocols", 
+    ar: "أموالك وأرباحك مؤمنة بالكامل عبر بروتوكول التعدين الموزع الخاص بنا، نضمن لك سيولة مستمرة وعمليات سحب فورية." 
+  },
+  needHelpDesc: { 
+    en: "Talk to our team 24/7 for any inquiries", 
+    ar: "فريق الدعم متاح للرد على استفساراتكم 24/7" 
+  },
+  requestHelpBtn: { en: "Request Help Now", ar: "اطلب المساعدة الآن" },
+  talkToUsBtn: { en: "Talk to Us", ar: "تحدث معنا" },
+  historyTitle: { en: "History", ar: "السجل" }
 };
