@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { 
@@ -8,7 +7,7 @@ import {
   History, ArrowUpRight, Award, Layers,
   ExternalLink, Calendar, AlertCircle, Headphones, Plus, Minus, Lock, Image as ImageIcon,
   Coins, Shield, BadgeCheck, LifeBuoy, Search, CheckCircle2, Mail, Clock, StickyNote, Bookmark,
-  Sparkles, ZapOff, Database, ChevronRight, CheckCircle
+  Sparkles, ZapOff, Database, ChevronRight, CheckCircle, HelpCircle, Wallet
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL, REFERRAL_PERCENT, NETWORK } from './constants';
@@ -28,6 +27,7 @@ const App: React.FC = () => {
   const [showRecharge, setShowRecharge] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false); 
   const [syncing, setSyncing] = useState(false);
@@ -79,6 +79,12 @@ const App: React.FC = () => {
           created_at: profile.created_at
         });
         await fetchAdminUUID();
+        
+        // Show welcome if logging in for the first time in this session
+        if (!sessionStorage.getItem('minepro_welcome_shown')) {
+          setShowWelcome(true);
+          sessionStorage.setItem('minepro_welcome_shown', 'true');
+        }
       }
     } catch (err: any) { showToast(err, "error"); } 
     finally { setLoading(false); setSyncing(false); }
@@ -160,10 +166,11 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {showWelcome && <WelcomeModal onClose={() => setShowWelcome(false)} lang={lang} />}
       {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
       {showRecharge && <RechargeModal onClose={() => setShowRecharge(false)} onDeposit={() => fetchAllUserData(session.user.id, session.user.email || '')} showToast={showToast} userId={session.user.id} lang={lang} />}
       {showWithdraw && <WithdrawModal onClose={() => setShowWithdraw(false)} onWithdraw={() => fetchAllUserData(session.user.id, session.user.email || '')} userData={userData} userId={session.user.id} showToast={showToast} lang={lang} />}
-      {showSupport && <SupportChatModal lang={lang} onClose={() => setShowSupport(false)} userId={session.user.id} initialAdminId={adminUUID} showToast={showToast} />}
+      {showSupport && <SupportChatModal lang={lang} onClose={() => setShowSupport(false)} user={userData} userId={session.user.id} initialAdminId={adminUUID} showToast={showToast} />}
       
       <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[500] w-full max-w-[90%] space-y-3 pointer-events-none">
         {toasts.map(toast => (
@@ -645,6 +652,7 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
   );
 };
 
+/* Helper component for displaying user statistics in the details modal */
 const ProfileStatCard = ({ label, value, color }: any) => (
   <div className="bg-[#020617]/60 p-5 rounded-[1.8rem] border border-white/5 text-center space-y-2">
      <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">{label}</p>
@@ -703,8 +711,6 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
   );
 };
 
-// --- REDESIGNED TASKS VIEW ---
-
 const TasksView = ({ user, onComplete, t, lang }: any) => {
   const [currentTime, setCurrentTime] = useState(Date.now());
   
@@ -719,8 +725,6 @@ const TasksView = ({ user, onComplete, t, lang }: any) => {
 
   return (
     <div className="space-y-6 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      
-      {/* Tasks Summary Header */}
       <div className="bg-gradient-to-br from-[#0f172a] to-[#020617] p-7 rounded-[2.5rem] border border-white/5 space-y-5 shadow-2xl relative overflow-hidden group">
          <div className="absolute top-0 right-0 p-4 opacity-5 rotate-12 group-hover:rotate-45 transition-transform duration-700">
             <Sparkles size={120} />
@@ -746,7 +750,6 @@ const TasksView = ({ user, onComplete, t, lang }: any) => {
          </div>
       </div>
 
-      {/* Nodes List */}
       <div className="space-y-4">
         {user.ownedMachines.length === 0 ? (
           <div className="bg-[#0b0f1a] p-12 rounded-[3rem] border border-white/5 text-center space-y-4">
@@ -791,7 +794,6 @@ const TasksView = ({ user, onComplete, t, lang }: any) => {
                   </div>
                </div>
 
-               {/* Modern Progress Visualization */}
                {!canClaim && (
                  <div className="space-y-2">
                     <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-slate-600">
@@ -847,6 +849,64 @@ const TasksView = ({ user, onComplete, t, lang }: any) => {
   );
 };
 
+const WelcomeModal = ({ onClose, lang }: { onClose: () => void, lang: Language }) => {
+  const [step, setStep] = useState(0);
+  const steps = [
+    {
+      icon: <Zap size={40} className="text-blue-500" />,
+      title: lang === 'ar' ? 'مرحباً بك في MINEPRO' : 'Welcome to MINEPRO',
+      text: lang === 'ar' ? 'أهلاً بك في أقوى منصة لتوليد الأصول الرقمية. نحن نستخدم تقنيات التعدين السحابي المتقدمة لضمان عوائد مستقرة وفورية.' : 'Welcome to the most powerful digital asset generation platform. We use advanced cloud mining technologies to ensure stable and instant returns.'
+    },
+    {
+      icon: <Layers size={40} className="text-emerald-500" />,
+      title: lang === 'ar' ? 'لماذا هذه الأرباح؟' : 'Why these profits?',
+      text: lang === 'ar' ? 'تعمل المنصة كجسر مالي متطور، حيث نقوم بتحويل الأموال عبر شبكة ضخمة من المحافظ لتأمين السيولة وتعزيز شرعية الأصول الرقمية في الأسواق العالمية، مما يولد هوامش ربح عالية للمشتركين.' : 'The platform acts as a sophisticated financial bridge, where we transfer funds across a vast network of wallets to secure liquidity and enhance the legitimacy of digital assets in global markets, generating high profit margins for subscribers.'
+    },
+    {
+      icon: <Cpu size={40} className="text-rose-500" />,
+      title: lang === 'ar' ? 'نظام الماكينات' : 'Machine System',
+      text: lang === 'ar' ? 'يمكنك تفعيل عقد (ماكينة) بأسعار تبدأ من 10 USDT. كل ماكينة تعمل لمدة محددة وتمنحك أرباحاً يومية يمكنك سحبها فوراً.' : 'You can activate a contract (machine) at prices starting from 10 USDT. Each machine runs for a specific period and grants you daily profits that you can withdraw immediately.'
+    },
+    {
+      icon: <HelpCircle size={40} className="text-orange-500" />,
+      title: lang === 'ar' ? 'استعادة الأموال العالقة' : 'Recover Stuck Funds',
+      text: lang === 'ar' ? 'هل لديك أموال عالقة في منصات أخرى؟ فريقنا يساعدك في استعادتها مقابل عمولة (20% - 50%) تُدفع فقط بعد نجاح عملية السحب الخاصة بك.' : 'Have stuck funds in other platforms? Our team helps you recover them for a commission (20% - 50%) paid only after your withdrawal is successful.'
+    },
+    {
+      icon: <ShieldCheck size={40} className="text-blue-400" />,
+      title: lang === 'ar' ? 'قواعد الدعم الفني' : 'Support Rules',
+      text: lang === 'ar' ? 'الدعم الفني متاح حصرياً للمشتركين الذين يمتلكون عقداً مدفوعاً. الماكينة المجانية هي مساعدة لتجربة النظام ولا تمنح صلاحية الوصول للدعم، إلا في حال وجود مشكلة في عملية الاشتراك نفسها.' : 'Technical support is exclusively available to subscribers with a paid contract. The free machine is a helper to try the system and does not grant support access, except for issues regarding the subscription process itself.'
+    }
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[600] bg-black/95 backdrop-blur-md flex items-center justify-center p-5 animate-in fade-in duration-500">
+       <div className="bg-[#0b1424] w-full max-w-sm rounded-[3rem] border border-white/5 flex flex-col items-center p-8 space-y-6 text-center relative shadow-2xl">
+          <div className="w-20 h-20 rounded-3xl bg-white/5 flex items-center justify-center mb-2 shadow-inner">
+             {steps[step].icon}
+          </div>
+          <div className="space-y-3">
+             <h3 className="text-white font-black text-xl italic uppercase tracking-tighter">{steps[step].title}</h3>
+             <p className="text-slate-400 text-[13px] leading-relaxed font-bold">{steps[step].text}</p>
+          </div>
+          <div className="flex gap-2 w-full pt-4">
+             {step > 0 && (
+               <button onClick={() => setStep(step - 1)} className="flex-1 bg-white/5 text-slate-400 py-4 rounded-2xl font-black text-xs uppercase tracking-widest">{lang === 'ar' ? 'السابق' : 'BACK'}</button>
+             )}
+             <button onClick={() => step < steps.length - 1 ? setStep(step + 1) : onClose()} className="flex-[2] bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl">
+               {step < steps.length - 1 ? (lang === 'ar' ? 'التالي' : 'NEXT') : (lang === 'ar' ? 'ابدأ الآن' : 'GET STARTED')}
+             </button>
+          </div>
+          <div className="flex gap-1.5">
+             {steps.map((_, i) => (
+               <div key={i} className={`h-1 rounded-full transition-all duration-300 ${i === step ? 'w-6 bg-blue-500' : 'w-2 bg-white/10'}`}></div>
+             ))}
+          </div>
+       </div>
+    </div>
+  );
+};
+
 const TeamView = ({ user, t, lang, showToast }: any) => {
   return (
     <div className="space-y-6 pb-10">
@@ -895,6 +955,7 @@ const ProfileItem = ({ label, value, icon: Icon, color }: any) => (
   </div>
 );
 
+/* Helper component for navigation items */
 const NavItem = ({ icon: Icon, label, active, onClick }: any) => (
   <button onClick={onClick} className="flex flex-col items-center gap-1 group">
     <div className={`p-3 rounded-2xl transition-all ${active ? 'bg-blue-600 text-white shadow-[0_5px_15px_rgba(37,99,235,0.4)] scale-110' : 'text-slate-500 hover:text-blue-400'}`}>
@@ -904,6 +965,7 @@ const NavItem = ({ icon: Icon, label, active, onClick }: any) => (
   </button>
 );
 
+/* Statistical card component for metrics */
 const StatCard = ({ icon: Icon, label, value, color, bg }: any) => (
   <div className={`${bg} p-6 rounded-[2.5rem] border border-white/5 space-y-3 shadow-xl`}>
      <div className={`w-11 h-11 rounded-2xl bg-black/20 flex items-center justify-center ${color}`}><Icon size={20}/></div>
@@ -914,6 +976,7 @@ const StatCard = ({ icon: Icon, label, value, color, bg }: any) => (
   </div>
 );
 
+/* Standardized loading screen for protocol data synchronization */
 const ProtocolLoadingScreen = () => (
   <div className="fixed inset-0 bg-[#020617] flex flex-col items-center justify-center space-y-6">
     <div className="w-16 h-16 border-4 border-blue-500/10 border-t-blue-500 rounded-full animate-spin shadow-[0_0_20px_rgba(37,99,235,0.3)]"></div>
@@ -955,54 +1018,50 @@ const RechargeModal = ({ onClose, onDeposit, showToast, userId, lang }: any) => 
   };
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-5 animate-in fade-in">
-       <div className="bg-[#111827] w-full max-w-md rounded-[3rem] border border-white/10 p-8 space-y-7 relative overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-          <button onClick={onClose} className="absolute top-6 right-6 p-2.5 bg-white/5 rounded-2xl text-slate-400 hover:text-white transition-all"><X size={20}/></button>
+    <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+       <div className="bg-[#111827] w-[92%] max-w-md rounded-[2.5rem] border border-white/10 p-6 space-y-5 relative overflow-y-auto max-h-[95vh] shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+          <button onClick={onClose} className="absolute top-5 right-5 p-2 bg-white/5 rounded-2xl text-slate-400 hover:text-white transition-all"><X size={18}/></button>
           
           <div className="text-center space-y-1">
-             <h3 className="text-2xl font-black italic tracking-widest text-white uppercase">شحن الرصيد</h3>
-             <p className="text-[10px] text-blue-500 font-black tracking-widest uppercase opacity-70">NETWORK: BEP20 (BSC)</p>
+             <h3 className="text-xl font-black italic tracking-widest text-white uppercase">شحن الرصيد</h3>
+             <p className="text-[9px] text-blue-500 font-black tracking-widest uppercase opacity-70">NETWORK: BEP20 (BSC)</p>
           </div>
 
-          <div className="bg-[#1f2937]/50 p-5 rounded-3xl border border-white/5 flex items-center justify-between gap-3 group">
-             <p className="text-[11px] font-mono text-blue-400 break-all select-all flex-1">{DEPOSIT_ADDRESS}</p>
-             <button onClick={() => { navigator.clipboard.writeText(DEPOSIT_ADDRESS); showToast('Address Copied', 'success'); }} className="p-2.5 bg-blue-600/20 text-blue-500 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Copy size={16}/></button>
+          <div className="bg-[#1f2937]/50 p-4 rounded-2xl border border-white/5 flex items-center justify-between gap-3 group">
+             <p className="text-[10px] font-mono text-blue-400 break-all select-all flex-1 leading-tight">{DEPOSIT_ADDRESS}</p>
+             <button onClick={() => { navigator.clipboard.writeText(DEPOSIT_ADDRESS); showToast('Address Copied', 'success'); }} className="p-2 bg-blue-600/20 text-blue-500 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Copy size={14}/></button>
           </div>
 
-          <div className="space-y-2 text-right px-1">
-             <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">المبلغ المودع</p>
-             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border-none outline-none text-4xl font-black italic text-center py-6 rounded-3xl text-white placeholder-white/20" placeholder="0.00" />
+          <div className="space-y-1 text-right px-1">
+             <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">المبلغ المودع</p>
+             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border-none outline-none text-3xl font-black italic text-center py-4 rounded-2xl text-white placeholder-white/20" placeholder="0.00" />
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div className="flex items-center justify-end gap-2 px-1 text-slate-500">
-               <p className="text-[10px] font-black uppercase tracking-widest">إرفاق لقطة شاشة للإثبات</p>
+               <p className="text-[9px] font-black uppercase tracking-widest">إرفاق لقطة شاشة للإثبات</p>
             </div>
             
-            <div className="bg-blue-600/10 p-5 rounded-3xl border border-blue-500/20 flex items-start gap-4 text-right">
-               <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0 mt-1">
-                  <Info size={18} className="text-blue-500" />
-               </div>
-               <p className="text-[10px] text-blue-100 font-bold leading-relaxed italic">يجب إرفاق لقطة شاشة واضحة من محفظتك توضح تفاصيل عملية التحويل (مكتملة) لضمان سرعة معالجة الطلب.</p>
+            <div className="bg-blue-600/10 p-4 rounded-2xl border border-blue-500/20 flex items-start gap-3 text-right">
+               <Info size={16} className="text-blue-500 shrink-0 mt-0.5" />
+               <p className="text-[9px] text-blue-100 font-bold leading-relaxed italic">يجب إرفاق لقطة شاشة واضحة من محفظتك توضح تفاصيل عملية التحويل (مكتملة) لضمان سرعة معالجة الطلب.</p>
             </div>
 
-            <div onClick={() => fileRef.current?.click()} className="w-full h-44 bg-white/5 border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center cursor-pointer group hover:border-blue-500/50 transition-all overflow-hidden relative">
+            <div onClick={() => fileRef.current?.click()} className="w-full h-36 bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer group hover:border-blue-500/50 transition-all overflow-hidden relative">
                {proof ? <img src={proof} className="w-full h-full object-cover" /> : <>
-                 <div className="w-16 h-16 rounded-full bg-blue-600/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                    <ImageIcon size={32} className="text-blue-500" />
-                 </div>
-                 <p className="text-[11px] text-slate-400 font-black uppercase group-hover:text-blue-400">اضغط لاختيار صورة</p>
+                 <ImageIcon size={28} className="text-blue-500 mb-2 group-hover:scale-110 transition-transform" />
+                 <p className="text-[10px] text-slate-400 font-black uppercase group-hover:text-blue-400">اضغط لاختيار صورة</p>
                </>}
             </div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
           </div>
 
-          <div className="flex items-center justify-center gap-2 py-2 opacity-50">
-             <Lock size={12} className="text-emerald-500" />
-             <p className="text-[9px] font-black uppercase text-emerald-500 tracking-tighter">بروتوكول تشفير الإيداع نشط ومؤمن بالكامل</p>
+          <div className="flex items-center justify-center gap-2 opacity-50">
+             <Lock size={10} className="text-emerald-500" />
+             <p className="text-[8px] font-black uppercase text-emerald-500 tracking-tighter">بروتوكول تشفير الإيداع نشط ومؤمن بالكامل</p>
           </div>
 
-          <button onClick={handleSubmit} disabled={loading} className="w-full bg-blue-600 py-5 rounded-[2rem] font-black text-white uppercase tracking-[0.3em] shadow-[0_10px_30px_rgba(37,99,235,0.4)] active:scale-95 transition-all">
+          <button onClick={handleSubmit} disabled={loading} className="w-full bg-blue-600 py-4 rounded-[1.5rem] font-black text-white text-sm uppercase tracking-[0.3em] shadow-lg active:scale-95 transition-all">
              {loading ? <Loader2 className="animate-spin mx-auto" /> : (lang === 'ar' ? 'تأكيد' : 'CONFIRM')}
           </button>
        </div>
@@ -1123,11 +1182,13 @@ const InfoModal = ({ onClose }: { onClose: () => void }) => (
   </div>
 );
 
-const SupportChatModal = ({ lang, onClose, userId, initialAdminId, showToast, isAdminReply }: any) => {
+const SupportChatModal = ({ lang, onClose, user, userId, initialAdminId, showToast, isAdminReply }: any) => {
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const isSubscribed = user?.ownedMachines?.some((um: any) => um.machine_id !== 0) || false;
 
   const fetchMessages = useCallback(async () => {
     const { data } = await supabase.from('support_messages').select('*').or(`sender_id.eq.${userId},receiver_id.eq.${userId}`).order('created_at', { ascending: true });
@@ -1144,6 +1205,18 @@ const SupportChatModal = ({ lang, onClose, userId, initialAdminId, showToast, is
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !initialAdminId) return;
+    
+    // Only allow support if subscribed or if it's an admin reply or if user is asking about subscription
+    if (!isAdminReply && !isSubscribed) {
+       // Check if message looks like a subscription query
+       const q = newMessage.toLowerCase();
+       const isSubQuery = q.includes('اشتراك') || q.includes('تفعيل') || q.includes('subscribe') || q.includes('activate') || q.includes('deposit') || q.includes('ايداع');
+       if (!isSubQuery) {
+         showToast(lang === 'ar' ? 'يجب الاشتراك أولاً لاستخدام الدعم الفني' : 'You must subscribe first to use support', 'error');
+         return;
+       }
+    }
+
     try {
       await supabase.from('support_messages').insert({ sender_id: isAdminReply ? initialAdminId : userId, receiver_id: isAdminReply ? userId : initialAdminId, message: newMessage.trim() });
       setNewMessage('');
@@ -1159,6 +1232,11 @@ const SupportChatModal = ({ lang, onClose, userId, initialAdminId, showToast, is
         <div className="w-12"></div>
       </header>
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
+        {!isSubscribed && !isAdminReply && (
+          <div className="bg-orange-500/10 p-5 rounded-[2rem] border border-orange-500/20 text-orange-200 text-xs font-bold leading-relaxed mb-4 text-center">
+            {lang === 'ar' ? '⚠️ تنبيه: نظام الدعم مخصص للمشتركين فقط. يمكنك حالياً إرسال رسائل تتعلق بمشاكل الاشتراك أو الإيداع فقط.' : '⚠️ Alert: Support system is for subscribers only. You can currently only send messages related to subscription or deposit issues.'}
+          </div>
+        )}
         {loading ? <Loader2 className="animate-spin mx-auto text-blue-500" /> : messages.map(m => {
           const isMe = isAdminReply ? m.sender_id === initialAdminId : m.sender_id === userId;
           return (
