@@ -7,7 +7,7 @@ import {
   MessageCircle, Send, LogOut, TrendingUp, Activity, Info, 
   History, ArrowUpRight, Award, Layers,
   ExternalLink, Calendar, AlertCircle, Headphones, Plus, Minus, Lock, Image as ImageIcon,
-  Coins, Shield, BadgeCheck, LifeBuoy, Search, CheckCircle2
+  Coins, Shield, BadgeCheck, LifeBuoy, Search, CheckCircle2, Mail, Clock
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL, REFERRAL_PERCENT, NETWORK } from './constants';
@@ -472,61 +472,137 @@ const AdminView = ({ adminId, t, showToast, lang }: any) => {
   );
 };
 
+// --- REDESIGNED USER DETAILS MODAL (CLIENT PROFILE) ---
+
 const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
   const [u, setU] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [amountInput, setAmountInput] = useState('');
+  const [activeMachines, setActiveMachines] = useState<any[]>([]);
 
   const fetchUser = useCallback(async () => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-    setU(data);
-    setLoading(false);
+    try {
+      const [pRes, mRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+        supabase.from('user_machines').select('*').eq('user_id', userId).gt('remaining_days', 0)
+      ]);
+      setU(pRes.data);
+      setActiveMachines(mRes.data || []);
+      setLoading(false);
+    } catch (e) {}
   }, [userId]);
 
   useEffect(() => { fetchUser(); }, [fetchUser]);
 
   const modifyBalance = async (op: 'add' | 'sub') => {
     const val = Number(amountInput);
-    if (isNaN(val) || val <= 0) return showToast("Invalid amount", "error");
+    if (isNaN(val) || val <= 0) return showToast("أدخل مبلغا صحيحا", "error");
     try {
       const newBal = op === 'add' ? Number(u.balance) + val : Number(u.balance) - val;
-      const { error } = await supabase.from('profiles').update({ balance: newBal, withdrawable_balance: Math.max(0, op === 'add' ? Number(u.withdrawable_balance) + val : Number(u.withdrawable_balance) - val) }).eq('id', userId);
+      const { error } = await supabase.from('profiles').update({ 
+        balance: newBal, 
+        withdrawable_balance: Math.max(0, op === 'add' ? Number(u.withdrawable_balance) + val : Number(u.withdrawable_balance) - val) 
+      }).eq('id', userId);
       if (error) throw error;
-      showToast("Protocol updated", "success");
+      showToast("تم تحديث الرصيد بنجاح", "success");
       setAmountInput('');
       fetchUser();
     } catch (e: any) { showToast(e, "error"); }
   };
 
-  if (loading) return null;
+  if (loading || !u) return null;
 
   return (
-    <div className="fixed inset-0 z-[250] bg-black/95 backdrop-blur-md flex items-center justify-center p-6 animate-in zoom-in">
-       <div className="bg-[#0b0f1a] w-full max-w-md rounded-[3rem] border border-white/10 p-8 space-y-6 relative overflow-y-auto max-h-[90vh] shadow-2xl">
-          <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-white/5 rounded-2xl text-slate-400"><X size={20}/></button>
+    <div className="fixed inset-0 z-[250] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+       <div className="bg-[#0b1424] w-full max-w-md rounded-[3rem] border border-white/5 flex flex-col relative overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)] max-h-[90vh]">
           
-          <div className="text-center space-y-2">
-             <div className="w-20 h-20 rounded-3xl bg-blue-600 flex items-center justify-center text-white text-3xl font-black italic mx-auto shadow-xl">
-               {u.first_name?.[0] || 'U'}
+          {/* Header */}
+          <div className="p-8 pb-4 text-center relative border-b border-white/5">
+             <button onClick={onClose} className="absolute top-8 right-8 p-2.5 bg-white/5 rounded-2xl text-slate-500 hover:text-white transition-all"><X size={20}/></button>
+             <h3 className="text-white font-black text-xl italic uppercase tracking-widest">ملف العميل</h3>
+             <p className="text-[8px] text-blue-500/60 font-mono tracking-tighter mt-1">{u.id}</p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto no-scrollbar p-8 space-y-7">
+             {/* User Info Section */}
+             <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                   <div className="w-10 h-10 rounded-full bg-blue-600/10 flex items-center justify-center text-blue-500">
+                      <Mail size={18} />
+                   </div>
+                   <p className="text-[11px] font-bold text-slate-400 font-mono">{u.email}</p>
+                </div>
+                <div className="w-16 h-16 bg-blue-600 rounded-[1.2rem] flex items-center justify-center text-white text-3xl font-black italic shadow-[0_0_20px_rgba(37,99,235,0.4)]">?</div>
              </div>
-             <h4 className="text-white font-black uppercase italic text-lg">{u.first_name || 'User'}</h4>
-             <p className="text-[10px] text-slate-500 font-mono tracking-widest">{u.email}</p>
-          </div>
 
-          <div className="bg-black/40 p-6 rounded-[2rem] border border-white/5 space-y-4">
-             <InfoRow label="Balance" value={`${(u.balance || 0).toFixed(2)} USDT`} />
-             <InfoRow label="Withdrawable" value={`${(u.withdrawable_balance || 0).toFixed(2)} USDT`} />
-             <InfoRow label="Total Deposits" value={`${(u.total_recharge || 0).toFixed(2)} USDT`} />
-             <InfoRow label="Total Withdrawals" value={`${(u.total_withdraw || 0).toFixed(2)} USDT`} />
-             <InfoRow label="Referral Earn" value={`${(u.referral_earnings || 0).toFixed(2)} USDT`} />
-             <InfoRow label="Registration" value={new Date(u.created_at).toLocaleDateString()} />
-          </div>
+             {/* Stats Grid - MATCHES SCREENSHOT */}
+             <div className="grid grid-cols-2 gap-4">
+                <ProfileStatCard label="WITHDRAWABLE" value={u.withdrawable_balance.toFixed(2)} color="text-blue-500" />
+                <ProfileStatCard label="TOTAL BALANCE" value={u.balance.toFixed(2)} color="text-white" />
+                <ProfileStatCard label="TOTAL WITHDRAW" value={u.total_withdraw.toFixed(2)} color="text-red-500" />
+                <ProfileStatCard label="TOTAL DEPOSIT" value={u.total_recharge.toFixed(2)} color="text-emerald-500" />
+             </div>
 
-          <div className="space-y-4 pt-2">
-             <input type="number" value={amountInput} onChange={e => setAmountInput(e.target.value)} placeholder="0.00" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none text-2xl font-black italic text-center" />
-             <div className="flex gap-4">
-                <button onClick={() => modifyBalance('add')} className="flex-1 bg-emerald-600 py-4.5 rounded-2xl text-[11px] font-black uppercase flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"><Plus size={16}/> ADD FUNDS</button>
-                <button onClick={() => modifyBalance('sub')} className="flex-1 bg-red-600 py-4.5 rounded-2xl text-[11px] font-black uppercase flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"><Minus size={16}/> SUBTRACT</button>
+             {/* Footer Info Bar */}
+             <div className="bg-black/40 p-4 rounded-[1.5rem] border border-white/5 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                   <Clock size={14} className="text-slate-500" />
+                   <span className="text-[10px] text-slate-500 font-bold">{new Date(u.created_at).toLocaleDateString()}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                   <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">REF CODE: <span className="text-orange-500 font-black italic ml-1">{u.referral_code}</span></span>
+                   <Users size={14} className="text-slate-500" />
+                </div>
+             </div>
+
+             {/* Modification Controls - Balance Add/Sub */}
+             <div className="space-y-4 pt-2">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">تعديل الرصيد (إرسال / سحب)</p>
+                <div className="bg-black/40 p-2 rounded-3xl border border-white/5 flex gap-2">
+                   <input type="number" value={amountInput} onChange={e => setAmountInput(e.target.value)} placeholder="0.00" className="flex-1 bg-transparent border-none outline-none text-white text-xl font-black italic text-center placeholder-white/10" />
+                   <div className="flex gap-2">
+                      <button onClick={() => modifyBalance('add')} className="w-14 h-14 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"><Plus size={24}/></button>
+                      <button onClick={() => modifyBalance('sub')} className="w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"><Minus size={24}/></button>
+                   </div>
+                </div>
+             </div>
+
+             {/* Active Machines Section */}
+             <div className="space-y-4">
+                <div className="flex items-center justify-end gap-2 text-blue-500">
+                   <h4 className="text-[11px] font-black uppercase italic">الماكينات النشطة</h4>
+                   <Cpu size={18} />
+                </div>
+                <div className="space-y-3">
+                   {activeMachines.length === 0 ? (
+                      <div className="p-10 bg-black/20 rounded-3xl border border-dashed border-white/5 text-center">
+                         <p className="text-[9px] text-slate-700 font-black uppercase tracking-[0.2em]">NO ACTIVE HARDWARE</p>
+                      </div>
+                   ) : activeMachines.map(am => {
+                      const m = MACHINES.find(mach => mach.id === am.machine_id);
+                      return (
+                         <div key={am.id} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
+                            <div>
+                               <p className="text-white font-black text-[11px] uppercase italic">{m?.name || 'NODE'}</p>
+                               <p className="text-[8px] text-slate-500 font-bold uppercase mt-0.5">{am.remaining_days} DAYS LEFT</p>
+                            </div>
+                            <Cpu size={16} className="text-blue-500" />
+                         </div>
+                      );
+                   })}
+                </div>
+             </div>
+
+             {/* Full History Section */}
+             <div className="space-y-4 pt-4">
+                <div className="flex items-center justify-end gap-2 text-blue-500">
+                   <h4 className="text-[11px] font-black uppercase italic">سجل العمليات الكامل</h4>
+                   <Clock size={18} />
+                </div>
+                <div className="bg-black/20 p-8 rounded-3xl border border-dashed border-white/5 text-center opacity-30">
+                    <History size={24} className="mx-auto mb-2" />
+                    <p className="text-[9px] font-black uppercase tracking-widest">NO RECORDS FOUND</p>
+                </div>
              </div>
           </div>
        </div>
@@ -534,10 +610,10 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
   );
 };
 
-const InfoRow = ({ label, value }: any) => (
-  <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest border-b border-white/5 pb-2">
-     <span className="text-slate-500">{label}</span>
-     <span className="text-blue-500">{value}</span>
+const ProfileStatCard = ({ label, value, color }: any) => (
+  <div className="bg-[#020617]/60 p-5 rounded-[1.8rem] border border-white/5 text-center space-y-2">
+     <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">{label}</p>
+     <p className={`text-xl font-black italic tracking-tight ${color}`}>{value}</p>
   </div>
 );
 
