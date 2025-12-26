@@ -455,7 +455,9 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: { userId: string
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [sendAmount, setSendAmount] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
 
   const fetch = useCallback(async () => {
     const [p, m, t] = await Promise.all([
@@ -479,7 +481,6 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: { userId: string
     
     setIsSending(true);
     try {
-      // 1. تحديث رصيد الملف الشخصي
       const { error: updErr } = await supabase.from('profiles').update({ 
         balance: Number(data.balance || 0) + amount,
         total_recharge: Number(data.total_recharge || 0) + amount
@@ -487,7 +488,6 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: { userId: string
       
       if (updErr) throw updErr;
 
-      // 2. إضافة سجل معاملة يدوية
       await supabase.from('transactions').insert({
         user_id: userId,
         type: 'deposit',
@@ -499,11 +499,45 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: { userId: string
 
       showToast(lang === 'ar' ? "تم إرسال المبلغ بنجاح" : "Funds sent successfully", "success");
       setSendAmount('');
-      fetch(); // تحديث البيانات المعروضة
+      fetch();
     } catch (e: any) {
       showToast(e, "error");
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleWithdrawFunds = async () => {
+    const amount = Number(withdrawAmount);
+    if (!amount || amount <= 0) {
+      return showToast(lang === 'ar' ? "يرجى إدخال مبلغ صحيح" : "Invalid amount", "error");
+    }
+    
+    setIsWithdrawing(true);
+    try {
+      const { error: updErr } = await supabase.from('profiles').update({ 
+        balance: Math.max(0, Number(data.balance || 0) - amount),
+        withdrawable_balance: Math.max(0, Number(data.withdrawable_balance || 0) - amount)
+      }).eq('id', userId);
+      
+      if (updErr) throw updErr;
+
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        type: 'withdrawal',
+        amount: -amount,
+        status: 'completed',
+        details: 'Admin Manual Deduction',
+        date: new Date().toISOString()
+      });
+
+      showToast(lang === 'ar' ? "تم سحب المبلغ بنجاح" : "Funds withdrawn successfully", "success");
+      setWithdrawAmount('');
+      fetch();
+    } catch (e: any) {
+      showToast(e, "error");
+    } finally {
+      setIsWithdrawing(false);
     }
   };
 
@@ -568,7 +602,6 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: { userId: string
              </div>
           </div>
 
-          {/* New Feature: Manual Fund Injection */}
           <div className="bg-[#0b0f1a] p-6 rounded-[2rem] border border-blue-500/20 space-y-4 shadow-xl">
              <div className="flex items-center gap-2 px-1">
                 <Coins size={16} className="text-blue-500" />
@@ -591,6 +624,32 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: { userId: string
                    className="bg-blue-600 text-white px-6 rounded-2xl shadow-lg active:scale-95 transition-all flex items-center justify-center min-w-[100px]"
                 >
                    {isSending ? <Loader2 className="animate-spin" size={18}/> : <Send size={18}/>}
+                </button>
+             </div>
+          </div>
+
+          <div className="bg-[#0b0f1a] p-6 rounded-[2rem] border border-red-500/20 space-y-4 shadow-xl">
+             <div className="flex items-center gap-2 px-1">
+                <ShieldAlert size={16} className="text-red-500" />
+                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">{lang === 'ar' ? 'سحب مبلغ (خصم يدوي)' : 'MANUAL FUND DEDUCTION'}</h4>
+             </div>
+             <div className="flex gap-3">
+                <div className="flex-1 relative">
+                   <input 
+                      type="number" 
+                      placeholder="0.00" 
+                      value={withdrawAmount} 
+                      onChange={e => setWithdrawAmount(e.target.value)}
+                      className="w-full bg-black/50 border border-white/10 p-4 rounded-2xl text-white font-black outline-none focus:border-red-500/50 pr-12" 
+                   />
+                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-red-500 uppercase">USDT</span>
+                </div>
+                <button 
+                   onClick={handleWithdrawFunds} 
+                   disabled={isWithdrawing}
+                   className="bg-red-600 text-white px-6 rounded-2xl shadow-lg active:scale-95 transition-all flex items-center justify-center min-w-[100px]"
+                >
+                   {isWithdrawing ? <Loader2 className="animate-spin" size={18}/> : <Check size={18}/>}
                 </button>
              </div>
           </div>
@@ -887,523 +946,440 @@ const WithdrawModal = ({ onClose, userData, userId, showToast, lang }: any) => {
   );
 };
 
-// --- Shared Components ---
+// --- Missing Components ---
 
-const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowSupport, lang }: any) => (
-  <div className="space-y-6 animate-in fade-in">
-    <div className="bg-[#0b0f1a] border border-white/10 rounded-[2rem] p-7 shadow-2xl space-y-6 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 blur-3xl rounded-full"></div>
-      <div className="flex justify-between items-center relative z-10">
-        <p className="text-white/40 font-black text-[10px] uppercase tracking-[0.2em]">{t('balanceTitle')}</p>
-        <button onClick={onShowInfo} className="text-blue-500 text-[10px] font-black tracking-widest uppercase">Protocol info</button>
-      </div>
-      <h2 className="text-5xl font-black text-white italic tracking-tighter relative z-10">{(Number(user?.balance) || 0).toFixed(2)}<span className="text-sm text-blue-500 ml-2 not-italic font-bold tracking-widest">USDT</span></h2>
-      <div className="flex gap-4 relative z-10">
-        <button onClick={onShowRecharge} className="flex-1 bg-white text-black font-black py-4 rounded-2xl text-[12px] uppercase shadow-xl active:scale-95 transition-all">{t('recharge')}</button>
-        <button onClick={onShowWithdraw} className="flex-1 bg-blue-600 text-white font-black py-4 rounded-2xl text-[12px] uppercase shadow-xl active:scale-95 transition-all">{t('withdraw')}</button>
-      </div>
+const ProtocolLoadingScreen = () => (
+  <div className="fixed inset-0 bg-[#020617] flex flex-col items-center justify-center space-y-4">
+    <div className="relative">
+      <div className="w-20 h-20 border-2 border-blue-500/20 rounded-full animate-ping absolute inset-0"></div>
+      <div className="w-20 h-20 border-t-2 border-blue-500 rounded-full animate-spin"></div>
     </div>
-
-    <div className="bg-gradient-to-br from-red-600/10 to-blue-600/10 border border-white/5 rounded-[2.5rem] p-7 shadow-2xl relative overflow-hidden group">
-       <div className="flex items-start gap-5 relative z-10">
-          <div className="w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-[0_0_20px_rgba(220,38,38,0.4)] animate-pulse">
-             <LifeBuoy size={28} />
-          </div>
-          <div className="flex-1 space-y-3">
-             <h4 className="text-white font-black text-sm uppercase italic tracking-tight">
-               {lang === 'ar' ? 'هل لديك أموال عالقة؟' : 'Funds Stuck Elsewhere?'}
-             </h4>
-             <p className="text-[10px] text-slate-400 leading-relaxed font-bold">
-               {lang === 'ar' 
-                 ? "إذا كنت تواجه مشكلة في سحب أموالك من أي منصة مهام أخرى، فنحن هنا للمساعدة. فريقنا المتخصص يمكنه تقديم الدعم والمشورة لاستعادة حقوقك." 
-                 : "If you're facing issues withdrawing funds from any other task platforms, we are here to help. Our specialized team can provide support and guidance to recover your assets."}
-             </p>
-             <button onClick={onShowSupport} className="flex items-center gap-2 bg-white text-black text-[9px] font-black px-5 py-3 rounded-xl uppercase shadow-xl active:scale-95 transition-all">
-                <MessageCircle size={14} />
-                {lang === 'ar' ? 'اطلب المساعدة الآن' : 'REQUEST RECOVERY HELP'}
-             </button>
-          </div>
-       </div>
-       <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-600/5 blur-3xl rounded-full pointer-events-none"></div>
-    </div>
-
-    <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-[2rem] p-6 shadow-xl relative overflow-hidden group">
-       <div className="flex items-start gap-4 relative z-10">
-          <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white shrink-0 shadow-lg">
-             <BadgeCheck size={24} />
-          </div>
-          <div className="flex-1">
-             <h4 className="text-emerald-400 font-black text-xs uppercase italic tracking-wider">
-               {lang === 'ar' ? 'نظام آمن ومستقر' : 'Secure & Stable System'}
-             </h4>
-             <p className="text-[10px] text-slate-400 mt-1 leading-relaxed font-bold">
-               {lang === 'ar' 
-                 ? "أموالك وأرباحك مؤمنة بالكامل عبر بروتوكول التعدين الموزع الخاص بنا. نضمن لك سيولة مستمرة وعمليات سحب فورية." 
-                 : "Your funds and profits are fully secured through our distributed mining protocol. We guarantee continuous liquidity and instant withdrawals."}
-             </p>
-          </div>
-       </div>
-       <div className="absolute -right-5 -bottom-5 w-24 h-24 bg-emerald-500/5 blur-2xl rounded-full"></div>
-    </div>
-
-    <div className="bg-gradient-to-r from-blue-600/10 to-transparent border border-blue-500/20 rounded-[2rem] p-6 shadow-xl relative overflow-hidden group">
-       <div className="flex items-center gap-5 relative z-10">
-          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg animate-bounce">
-             <Headphones size={24} />
-          </div>
-          <div className="flex-1">
-             <h4 className="text-white font-black text-sm uppercase italic">{lang === 'ar' ? 'هل تحتاج إلى مساعدة؟' : 'Need Assistance?'}</h4>
-             <p className="text-[10px] text-slate-500 mt-1">{lang === 'ar' ? 'فريق الدعم متاح للرد على استفساراتكم 24/7' : 'Our agents are available to help you 24/7'}</p>
-          </div>
-          <button onClick={onShowSupport} className="bg-white text-black text-[9px] font-black px-4 py-3 rounded-xl uppercase shadow-xl active:scale-90 transition-all">
-             {lang === 'ar' ? 'تحدث معنا' : 'Chat Now'}
-          </button>
-       </div>
-    </div>
-
-    <div className="space-y-4">
-       <h3 className="text-[10px] font-black uppercase text-slate-600 px-1 tracking-[0.3em]">{t('history')}</h3>
-       {user?.transactions.slice(0, 5).map((tx: any) => (
-         <div key={tx.id} className="bg-[#0b0f1a] p-5 rounded-2xl border border-white/5 flex justify-between items-center shadow-lg">
-           <div className="flex gap-4 items-center">
-             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.amount > 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-               {tx.type === 'task' ? <TrendingUp size={16}/> : (tx.type === 'deposit' ? <Zap size={16}/> : <Activity size={16}/>)}
-             </div>
-             <div>
-               <p className="text-xs font-black text-white uppercase italic">{String(tx.type)}</p>
-               <p className="text-[9px] text-slate-700 font-bold">{new Date(tx.date).toLocaleDateString()}</p>
-             </div>
-           </div>
-           <p className={`font-black text-lg ${tx.amount > 0 ? 'text-emerald-500' : 'text-red-500'}`}>{tx.amount > 0 ? '+' : ''}{Number(tx.amount).toFixed(2)}</p>
-         </div>
-       ))}
-    </div>
+    <span className="font-black italic text-xl tracking-tighter uppercase text-white">MINE<span className="text-blue-500">PRO</span></span>
   </div>
 );
 
-const MachinesView = ({ user, onBuy, t, lang }: any) => {
-  const getTierClass = (price: number) => {
-    if (price <= 100) return 'tier-bronze-fx'; 
-    if (price <= 1000) return 'tier-gold-fx';
-    if (price <= 10000) return 'tier-platinum-fx shimmer-effect';
-    return 'tier-diamond-fx shimmer-effect';
-  };
-
-  const getTierIcon = (price: number) => {
-    if (price <= 100) return <Award size={24} />;
-    if (price <= 1000) return <Layers size={24} />;
-    if (price <= 10000) return <Gem size={24} />;
-    return <Zap size={24} />;
-  };
-
-  return (
-    <div className="space-y-6 animate-in fade-in pb-8">
-      <div className="flex justify-between items-center px-1">
-        <h2 className="text-xl font-black italic uppercase text-white">{t('machines')}</h2>
-        <span className="text-[9px] bg-white/5 px-3 py-1 rounded-full text-slate-500 font-black uppercase tracking-widest border border-white/5">Auto-Mining Protocol</span>
-      </div>
-      
-      <div className="space-y-8">
-        {MACHINES.map((m) => {
-          const owned = (user?.ownedMachines || []).some((om: any) => om.machine_id === m.id);
-          const totalROI = (m.dailyProfit * m.duration).toFixed(2);
-          const tierClass = getTierClass(m.price);
-
-          return (
-            <div 
-              key={m.id} 
-              className={`bg-[#0b0f1a] rounded-[2.5rem] p-8 border border-white/5 space-y-6 shadow-2xl relative overflow-hidden transition-all hover:border-white/20 active:scale-[0.98] ${tierClass} ${owned ? 'ring-2 ring-blue-500/40 ring-offset-4 ring-offset-[#020617]' : ''}`}
-            >
-               <div className="flex justify-between items-start relative z-10">
-                  <div className="flex gap-4 items-center">
-                    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${m.color} flex items-center justify-center text-white shadow-xl animate-float`}>
-                      {getTierIcon(m.price)}
-                    </div>
-                    <div>
-                      <h3 className="font-black text-lg text-white uppercase italic tracking-tighter leading-none">{String(m.name)}</h3>
-                      <p className="text-[9px] text-blue-400 font-black uppercase tracking-[0.3em] mt-1.5 opacity-80">Tier Status: Optimized</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{lang === 'ar' ? 'السعر' : 'Unit Cost'}</p>
-                    <p className="text-3xl font-black text-white italic tracking-tighter">
-                      {m.price}<span className="text-xs not-italic ml-1 text-blue-500">U</span>
-                    </p>
-                  </div>
-               </div>
-
-               <div className="grid grid-cols-3 gap-3 relative z-10">
-                  <div className="bg-black/40 border border-white/5 p-4 rounded-3xl text-center backdrop-blur-md">
-                    <TrendingUp size={14} className="mx-auto mb-1.5 text-emerald-500" />
-                    <p className="text-[8px] text-slate-500 font-black uppercase mb-1">{lang === 'ar' ? 'الربح اليومي' : 'Daily'}</p>
-                    <p className="text-sm font-black text-emerald-500">+{m.dailyProfit}</p>
-                  </div>
-                  <div className="bg-black/40 border border-white/5 p-4 rounded-3xl text-center backdrop-blur-md">
-                    <Calendar size={14} className="mx-auto mb-1.5 text-blue-500" />
-                    <p className="text-[8px] text-slate-500 font-black uppercase mb-1">{lang === 'ar' ? 'المدة' : 'Cycle'}</p>
-                    <p className="text-sm font-black text-blue-400">{m.duration} {lang === 'ar' ? 'يوم' : 'Days'}</p>
-                  </div>
-                  <div className="bg-black/40 border border-white/5 p-4 rounded-3xl text-center backdrop-blur-md">
-                    <ArrowUpRight size={14} className="mx-auto mb-1.5 text-purple-500" />
-                    <p className="text-[8px] text-slate-500 font-black uppercase mb-1">{lang === 'ar' ? 'الإجمالي' : 'ROI'}</p>
-                    <p className="text-sm font-black text-purple-400">+{totalROI}</p>
-                  </div>
-               </div>
-
-               <button 
-                  onClick={() => !owned && onBuy(m)} 
-                  disabled={owned} 
-                  className={`w-full py-5 rounded-[1.8rem] font-black uppercase text-[11px] tracking-[0.25em] transition-all relative overflow-hidden shadow-2xl ${owned ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-white text-black active:scale-95'}`}
-               >
-                  {owned ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></div>
-                      NODE STABLE
-                    </span>
-                  ) : (
-                    <span className="flex items-center justify-center gap-2">
-                      {lang === 'ar' ? 'تفعيل الآن' : 'Initialize Protocol'}
-                    </span>
-                  )}
-               </button>
-               
-               <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/5 blur-3xl rounded-full pointer-events-none"></div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-const TasksView = ({ user, onComplete, t, lang }: any) => (
-  <div className="space-y-6 animate-in fade-in pb-8">
-    <h2 className="text-xl font-black italic uppercase text-white px-1">{t('tasks')}</h2>
-    {(user?.ownedMachines || []).map((um: any) => {
-      const m = MACHINES.find(x => x.id === um.machine_id);
-      const lastClaim = um.last_claim_date ? new Date(um.last_claim_date).getTime() : 0;
-      const isLocked = Date.now() - lastClaim < 24 * 60 * 60 * 1000;
-      return (
-        <div key={um.id} className="bg-[#0b0f1a] p-6 rounded-3xl border border-white/5 space-y-5 shadow-2xl">
-           <div className="flex justify-between items-center">
-              <div>
-                 <p className="text-white font-black text-base uppercase italic tracking-tight">{String(m?.name)}</p>
-                 <p className="text-[10px] text-slate-500 font-bold tracking-widest mt-1">{um.remaining_days} {lang === 'ar' ? 'أيام متبقية' : 'DAYS LEFT'}</p>
-              </div>
-              <p className="text-2xl font-black text-emerald-500 italic">+{Number(m?.dailyProfit).toFixed(2)}</p>
-           </div>
-           <button onClick={() => !isLocked && onComplete(um)} disabled={isLocked} className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all active:scale-95 shadow-xl ${isLocked ? 'bg-slate-800 text-slate-500' : 'bg-emerald-600 text-white hover:bg-emerald-500'}`}>
-              {isLocked ? (lang === 'ar' ? 'قيد المعالجة...' : 'STABILIZING...') : t('completeTask')}
-           </button>
-        </div>
-      );
-    })}
-    {(user?.ownedMachines || []).length === 0 && <div className="py-24 text-center opacity-20 space-y-4"><Cpu size={60} className="mx-auto" /><p className="text-xs font-black uppercase tracking-widest">No Active Nodes</p></div>}
-  </div>
-);
-
-const TeamView = ({ user, t, lang, showToast }: any) => {
-  return (
-    <div className="space-y-6 animate-in fade-in pb-8">
-      <h2 className="text-xl font-black italic uppercase text-white px-1">{t('team')}</h2>
-      <div className="bg-[#0b0f1a] rounded-[2rem] p-7 border border-white/10 space-y-6 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 blur-3xl rounded-full"></div>
-        <div className="space-y-2 relative z-10">
-          <p className="text-white/40 font-black text-[10px] uppercase tracking-[0.2em]">Network Program</p>
-          <h3 className="text-2xl font-black text-white italic tracking-tight uppercase">Affiliate Link</h3>
-          <p className="text-[11px] text-slate-500 leading-relaxed font-bold">
-            {lang === 'ar' ? `اربح عمولة ${REFERRAL_PERCENT * 100}% فورية من كل إيداع يقوم به فريقك.` : `Earn ${REFERRAL_PERCENT * 100}% instant reward on team deposits.`}
-          </p>
-        </div>
-        <div className="space-y-3 relative z-10">
-          <div onClick={() => { if (user?.referral_code) { navigator.clipboard.writeText(user.referral_code); showToast(lang === 'ar' ? "تم النسخ" : "Copied", "success"); } }} className="p-4 bg-black/60 rounded-2xl border border-white/5 flex justify-between items-center cursor-pointer group hover:border-blue-500/30">
-            <span className="text-white font-mono font-black text-lg uppercase tracking-widest">{user?.referral_code || '---'}</span>
-            <Copy size={18} className="text-blue-500 group-hover:scale-110" />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4 relative z-10">
-          <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
-            <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Total Rewards</p>
-            <p className="text-xl font-black text-emerald-500 italic">{(user?.referralEarnings || 0).toFixed(2)} <span className="text-[8px] not-italic">USDT</span></p>
-          </div>
-          <div className="bg-white/5 p-5 rounded-2xl border border-white/5 text-center">
-            <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Status</p>
-            <p className="text-xl font-black text-blue-400 uppercase italic">Elite</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ProfileView = ({ user, t, lang }: any) => (
-  <div className="space-y-6 animate-in fade-in pb-8">
-    <div className="p-7 bg-[#0b0f1a] border border-white/10 rounded-[2rem] shadow-2xl flex items-center gap-6 relative overflow-hidden">
-       <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-2 shadow-2xl">
-          <img src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user?.id || 'default'}`} className="w-full h-full" alt="avatar"/>
-       </div>
-       <div>
-          <h3 className="text-2xl font-black text-white italic tracking-tight">{String(user?.first_name)}</h3>
-          <p className="text-[10px] text-blue-500 font-mono font-bold uppercase">{String(user?.email)}</p>
-       </div>
-    </div>
-    <div className="grid grid-cols-2 gap-5">
-       <div className="bg-[#0b0f1a] p-6 rounded-3xl border border-white/5 shadow-xl"><p className="text-[10px] text-slate-600 uppercase font-black">Total Deposit</p><p className="text-2xl font-black text-emerald-500 italic mt-2">{(user?.totalRecharge || 0).toFixed(2)}</p></div>
-       <div className="bg-[#0b0f1a] p-6 rounded-3xl border border-white/5 shadow-xl"><p className="text-[10px] text-slate-600 uppercase font-black">Total Payout</p><p className="text-2xl font-black text-red-500 italic mt-2">{(user?.totalWithdraw || 0).toFixed(2)}</p></div>
-    </div>
-  </div>
-);
-
-const AuthView = ({ lang, t, username, showToast }: any) => {
+const AuthView = ({ lang, t, showToast }: any) => {
   const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', password: '' });
-  const [authLoading, setAuthLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleAuth = async (e: any) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAuthLoading(true);
+    setLoading(true);
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email: formData.email.trim(), password: formData.password });
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signUp({ 
-          email: formData.email.trim(), 
-          password: formData.password, 
-          options: { data: { first_name: formData.firstName.trim(), last_name: formData.lastName.trim() } }
-        });
+        const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        showToast(lang === 'ar' ? "نجاح! يرجى تسجيل الدخول" : "Success! Please Login.", "success"); 
-        setIsLogin(true);
+        showToast(lang === 'ar' ? "تم إنشاء الحساب بنجاح" : "Account created successfully", "success");
       }
-    } catch (e: any) { showToast(e, 'error'); }
-    finally { setAuthLoading(false); }
+    } catch (e: any) {
+      showToast(e, "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] p-7 flex flex-col justify-center animate-in fade-in">
-       <div className="max-w-xs mx-auto w-full space-y-10">
-          <div className="text-center">
-            <h1 className="text-5xl font-black text-white italic tracking-tighter uppercase scale-110 drop-shadow-[0_0_20px_rgba(37,99,235,0.3)]">MINE<span className="text-blue-500">PRO</span></h1>
-            <p className="text-[11px] text-slate-500 font-black uppercase tracking-[0.4em] mt-2 opacity-60">Distributed protocol</p>
+    <div className={`min-h-screen bg-[#020617] flex items-center justify-center p-6 ${lang === 'ar' ? 'rtl font-["Cairo"]' : ''}`}>
+      <div className="w-full max-w-md space-y-8">
+        <div className="text-center">
+          <div className="inline-flex w-16 h-16 bg-blue-600 rounded-2xl items-center justify-center shadow-[0_0_20px_rgba(37,99,235,0.4)] mb-4">
+            <Zap size={32} className="text-white fill-white" />
           </div>
-          <form onSubmit={handleAuth} className="bg-[#0b0f1a] p-7 rounded-[2.5rem] border border-white/10 space-y-5 shadow-2xl relative">
-             <div className="flex p-1.5 bg-black/60 rounded-2xl mb-6 shadow-inner border border-white/5">
-                <button type="button" onClick={() => setIsLogin(true)} className={`flex-1 py-3 rounded-xl text-[11px] font-black transition-all ${isLogin ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-600'}`}>LOGIN</button>
-                <button type="button" onClick={() => setIsLogin(false)} className={`flex-1 py-3 rounded-xl text-[11px] font-black transition-all ${!isLogin ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-600'}`}>JOIN</button>
-             </div>
-             
-             <div className="space-y-4">
-                {!isLogin && (
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest px-1">
-                      {lang === 'ar' ? 'الاسم الكامل' : 'Full Name'}
-                    </label>
-                    <input 
-                      placeholder={lang === 'ar' ? 'أدخل اسمك هنا' : 'Enter your name'} 
-                      value={formData.firstName} 
-                      onChange={e => setFormData({...formData, firstName: e.target.value})} 
-                      className="w-full bg-[#020617] border border-white/5 p-4 rounded-2xl text-xs text-white outline-none focus:border-blue-500/50" 
-                      required 
-                    />
-                  </div>
-                )}
-                <div className="space-y-1.5">
-                  <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest px-1">
-                    {lang === 'ar' ? 'البريد الإلكتروني' : 'Email Address'}
-                  </label>
-                  <input 
-                    placeholder={lang === 'ar' ? 'example@mail.com' : 'example@mail.com'} 
-                    type="email" 
-                    value={formData.email} 
-                    onChange={e => setFormData({...formData, email: e.target.value})} 
-                    className="w-full bg-[#020617] border border-white/5 p-4 rounded-2xl text-xs text-white outline-none focus:border-blue-500/50" 
-                    required 
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] text-slate-500 font-black uppercase tracking-widest px-1">
-                    {lang === 'ar' ? 'كلمة السر' : 'Password'}
-                  </label>
-                  <input 
-                    type="password" 
-                    placeholder="••••••••" 
-                    value={formData.password} 
-                    onChange={e => setFormData({...formData, password: e.target.value})} 
-                    className="w-full bg-[#020617] border border-white/5 p-4 rounded-2xl text-xs text-white outline-none focus:border-blue-500/50" 
-                    required 
-                  />
-                </div>
-             </div>
-             <button disabled={authLoading} className="w-full bg-white text-black font-black py-5 rounded-2xl text-[11px] uppercase tracking-[0.2em] shadow-2xl active:scale-95 flex justify-center items-center gap-2 mt-4">
-                {authLoading ? <Loader2 className="animate-spin" size={18} /> : (isLogin ? 'INITIALIZE LOGIN' : 'CREATE ACCOUNT')}
-             </button>
-          </form>
-       </div>
+          <h1 className="text-3xl font-black italic tracking-tighter text-white">MINE<span className="text-blue-500">PRO</span></h1>
+          <p className="text-slate-500 mt-2 text-sm uppercase tracking-widest font-black">Digital Asset Factory</p>
+        </div>
+
+        <form onSubmit={handleAuth} className="space-y-4">
+          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-blue-500/50" required />
+          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-blue-500/50" required />
+          <button type="submit" disabled={loading} className="w-full bg-blue-600 py-4 rounded-2xl font-black text-white uppercase tracking-widest shadow-xl active:scale-95 transition-all">
+            {loading ? <Loader2 className="animate-spin mx-auto" size={24} /> : (isLogin ? (lang === 'ar' ? 'تسجيل دخول' : 'Login') : (lang === 'ar' ? 'إنشاء حساب' : 'Register'))}
+          </button>
+        </form>
+
+        <button onClick={() => setIsLogin(!isLogin)} className="w-full text-slate-500 text-sm font-black uppercase tracking-wider">
+          {isLogin ? (lang === 'ar' ? 'ليس لديك حساب؟ سجل الآن' : 'New here? Register') : (lang === 'ar' ? 'لديك حساب؟ سجل دخول' : 'Already have account? Login')}
+        </button>
+      </div>
     </div>
   );
 };
 
-const ProtocolLoadingScreen = () => <div className="min-h-screen bg-[#020617] flex items-center justify-center flex-col gap-8"><div className="relative"><Loader2 className="animate-spin text-blue-500" size={56}/><div className="absolute inset-0 bg-blue-500/30 blur-3xl rounded-full"></div></div><p className="text-[10px] font-black text-slate-500 tracking-[0.6em] uppercase animate-pulse">Establishing Connection</p></div>;
-const NavItem = ({ icon: Icon, label, active, onClick }: any) => <button onClick={onClick} className={`flex flex-col items-center gap-2 transition-all duration-300 relative ${active ? 'text-blue-500 scale-110' : 'text-slate-700 opacity-40 hover:opacity-100 hover:scale-105'}`}><Icon size={22}/><span className="text-[8px] font-black uppercase tracking-[0.2em]">{label}</span></button>;
-const InfoModal = ({ onClose }: any) => <div className="fixed inset-0 bg-black/98 z-[300] flex items-center justify-center p-10 text-center animate-in fade-in"><div className="max-w-xs space-y-8"><div className="w-24 h-24 bg-blue-600 rounded-[2rem] mx-auto flex items-center justify-center shadow-[0_0_50px_rgba(37,99,235,0.4)]"><ShieldCheck size={48} className="text-white"/></div><div className="space-y-3"><h3 className="text-3xl font-black italic uppercase">MINE<span className="text-blue-500">PRO</span> ELITE</h3><p className="text-[11px] text-slate-500 font-black uppercase tracking-[0.3em] opacity-60">Mining Infrastructure v3.4.1</p></div><button onClick={onClose} className="w-full bg-white text-black py-5 rounded-[1.8rem] font-black text-[11px] uppercase tracking-widest shadow-2xl">Confirm Access</button></div></div>;
+const InfoModal = ({ onClose }: { onClose: () => void }) => (
+  <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in">
+    <div className="bg-[#0b0f1a] w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 space-y-6 relative">
+      <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/5 rounded-xl text-slate-400"><X size={20}/></button>
+      <div className="text-center space-y-4">
+        <div className="w-16 h-16 bg-blue-600/20 text-blue-500 rounded-3xl flex items-center justify-center mx-auto"><Info size={32}/></div>
+        <h3 className="text-white font-black text-xl uppercase italic">About MINEPRO</h3>
+        <p className="text-slate-400 text-sm leading-relaxed">
+          نظام متقدم لتعدين العملات الرقمية يعتمد على تكنولوجيا الذكاء الاصطناعي لضمان أفضل عوائد يومية لمستخدمينا.
+        </p>
+      </div>
+    </div>
+  </div>
+);
 
-const SupportChatModal = ({ userId, initialAdminId, onClose, lang, isAdminReply = false, showToast }: any) => {
-  const [messages, setMessages] = useState<any[]>([]);
+const SupportChatModal = ({ lang, onClose, userId, initialAdminId, showToast, isAdminReply }: any) => {
+  const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [sending, setSending] = useState(false);
-  const [adminId, setAdminId] = useState<string | null>(initialAdminId);
+  const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const ensureAdminId = useCallback(async () => {
-    if (adminId) return adminId;
-    
-    try {
-      const { data } = await supabase
-        .from('support_messages')
-        .select('sender_id, receiver_id')
-        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-        .limit(20);
-      
-      if (data && data.length > 0) {
-        const foundId = data.map(m => m.sender_id === userId ? m.receiver_id : m.sender_id)
-                           .find(id => id && id !== userId);
-        if (foundId) {
-          setAdminId(foundId);
-          return foundId;
-        }
-      }
-    } catch (e) {}
-
-    try {
-      const { data } = await supabase.from('profiles').select('id').eq('email', ADMIN_EMAIL).maybeSingle();
-      if (data) {
-        setAdminId(data.id);
-        return data.id;
-      }
-    } catch (e) {}
-
-    return null;
-  }, [adminId, userId]);
-
   const fetchMessages = useCallback(async () => {
-    if (!userId) return;
-    try {
-      const { data, error } = await supabase
-        .from('support_messages')
-        .select('*')
-        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-        .order('created_at', { ascending: true });
-      
-      if (error) throw error;
-      if (data) {
-        setMessages(data);
-        if (!adminId) {
-          const otherId = data.map(m => m.sender_id === userId ? m.receiver_id : m.sender_id)
-                             .find(id => id && id !== userId);
-          if (otherId) setAdminId(otherId);
-        }
-      }
-    } catch (e) {
-      console.error("Fetch error", e);
-    }
-  }, [userId, adminId]);
+    const { data } = await supabase.from('support_messages')
+      .select('*')
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .order('created_at', { ascending: true });
+    if (data) setMessages(data);
+    setLoading(false);
+    setTimeout(() => scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight), 100);
+  }, [userId]);
 
   useEffect(() => {
     fetchMessages();
-    
-    const channel = supabase
-      .channel(`chat-room-${userId}`)
-      .on('postgres_changes', { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'support_messages' 
-      }, () => {
-        fetchMessages(); 
-      })
-      .subscribe();
+    const sub = supabase.channel('msgs').on('postgres_changes', { event: '*', table: 'support_messages' }, () => fetchMessages()).subscribe();
+    return () => { sub.unsubscribe(); };
+  }, [fetchMessages]);
 
-    const intervalId = setInterval(fetchMessages, 5000);
-    return () => {
-      supabase.removeChannel(channel);
-      clearInterval(intervalId);
-    };
-  }, [userId, fetchMessages]);
-
-  useEffect(() => { 
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    } 
-  }, [messages]);
-
-  const send = async () => {
-    const msgText = newMessage.trim();
-    if (!msgText || !userId || sending) return;
-    
-    setSending(true);
-    setNewMessage('');
-
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !initialAdminId) return;
     try {
-      let currentAdminId = await ensureAdminId();
-      
-      const targetReceiverId = isAdminReply ? userId : (currentAdminId || userId);
-      const targetSenderId = isAdminReply ? (currentAdminId || userId) : userId;
-
-      const { error } = await supabase.from('support_messages').insert({ 
-        sender_id: targetSenderId, 
-        receiver_id: targetReceiverId, 
-        message: msgText 
+      const { error } = await supabase.from('support_messages').insert({
+        sender_id: isAdminReply ? initialAdminId : userId,
+        receiver_id: isAdminReply ? userId : initialAdminId,
+        message: newMessage.trim()
       });
-      
       if (error) throw error;
-      await fetchMessages(); 
-    } catch (e: any) {
-      console.error("Chat error", e);
-      showToast(lang === 'ar' ? "فشل الإرسال: " + e.message : "Send failed: " + e.message, "error");
-    } finally {
-      setSending(false);
-    }
+      setNewMessage('');
+      fetchMessages();
+    } catch (e: any) { showToast(e, "error"); }
   };
 
   return (
-    <div className="fixed inset-0 z-[200] bg-[#020617]/98 flex flex-col animate-in fade-in backdrop-blur-md">
-      <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#0b0f1a] shadow-xl">
-        <button onClick={onClose} className="p-2.5 bg-white/5 rounded-xl text-slate-400 hover:text-white transition-colors"><X size={24}/></button>
-        <h3 className="font-black text-white italic tracking-widest uppercase">{isAdminReply ? 'Client Terminal' : 'Support Node'}</h3>
+    <div className="fixed inset-0 z-[200] bg-[#020617] flex flex-col animate-in slide-in-from-bottom duration-300">
+      <header className="p-6 border-b border-white/5 flex justify-between items-center bg-[#0b0f1a]">
+        <button onClick={onClose} className="p-2.5 bg-white/5 rounded-xl text-slate-400"><X size={24}/></button>
+        <div className="text-center">
+          <h3 className="text-white font-black italic uppercase tracking-widest">{lang === 'ar' ? 'الدعم الفني' : 'SUPPORT PROTOCOL'}</h3>
+          <div className="flex items-center gap-1.5 justify-center mt-1">
+             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+             <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-tighter">Live Support Active</span>
+          </div>
+        </div>
         <div className="w-10"></div>
-      </div>
-      
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-7 space-y-5 no-scrollbar bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
-        {messages.map((m, i) => {
-          const isMe = m.sender_id === userId;
+      </header>
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar bg-[#020617]">
+        {loading ? <div className="flex justify-center py-10"><Loader2 className="animate-spin text-blue-500" /></div> : messages.map(m => {
+          const isMe = isAdminReply ? m.sender_id === initialAdminId : m.sender_id === userId;
           return (
-            <div key={m.id || i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] p-4 rounded-[1.5rem] text-[12px] font-black shadow-2xl ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white/10 text-slate-200 rounded-tl-none border border-white/5'}`}>{String(m.message)}</div>
+            <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] p-4 rounded-[1.5rem] text-sm font-medium ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white/5 text-slate-200 rounded-tl-none'}`}>
+                {m.message}
+                <p className={`text-[8px] mt-1 opacity-50 ${isMe ? 'text-right' : 'text-left'}`}>
+                  {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
             </div>
           );
         })}
-        {messages.length === 0 && (
-          <div className="text-center py-20 opacity-20 space-y-4">
-             <MessageCircle size={48} className="mx-auto" />
-             <p className="text-[10px] font-black uppercase tracking-widest">{lang === 'ar' ? 'ابدأ المحادثة الآن' : 'No Messages Yet'}</p>
-          </div>
-        )}
       </div>
 
-      <div className="p-5 bg-[#0b0f1a] border-t border-white/5 flex gap-3 shadow-2xl pb-10">
-        <button onClick={send} disabled={sending} className={`p-4 ${sending ? 'bg-slate-700' : 'bg-blue-600'} text-white rounded-2xl shadow-xl active:scale-90 transition-all`}>
-          {sending ? <Loader2 className="animate-spin" size={22}/> : <Send size={22}/>}
-        </button>
-        <input 
-          value={newMessage} 
-          onChange={e => setNewMessage(e.target.value)} 
-          onKeyPress={e => e.key === 'Enter' && send()} 
-          placeholder={lang === 'ar' ? 'اكتب رسالتك...' : 'Type message...'} 
-          className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm text-white outline-none focus:border-blue-500/50" 
-        />
+      <div className="p-6 bg-[#0b0f1a] border-t border-white/5">
+        <div className="flex gap-3 bg-black/40 p-2 rounded-2xl border border-white/5">
+          <input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} placeholder={lang === 'ar' ? 'اكتب رسالتك...' : 'Type message...'} className="flex-1 bg-transparent border-none outline-none text-white px-3 text-sm" />
+          <button onClick={sendMessage} className="p-3 bg-blue-600 text-white rounded-xl shadow-lg active:scale-95 transition-all"><Send size={20}/></button>
+        </div>
       </div>
     </div>
   );
 };
+
+const StatCard = ({ icon: Icon, label, value, color, bg }: any) => (
+  <div className={`${bg} p-6 rounded-[2rem] border border-white/5 space-y-3 shadow-xl`}>
+     <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center ${color} border border-white/5`}><Icon size={20}/></div>
+     <div>
+        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
+        <p className={`text-2xl font-black italic ${color}`}>{typeof value === 'number' ? value.toFixed(2) : value}</p>
+     </div>
+  </div>
+);
+
+const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowSupport, lang }: any) => {
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-8 rounded-[2.5rem] text-white shadow-[0_20px_50px_rgba(37,99,235,0.3)] relative overflow-hidden group">
+         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-white/20 transition-all duration-700"></div>
+         <div className="relative z-10 space-y-6">
+            <div className="flex justify-between items-center">
+               <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60 italic">{t('balanceTitle')}</p>
+                  <h2 className="text-4xl font-black italic tracking-tight">{(user.balance || 0).toFixed(2)} <span className="text-xl opacity-50 not-italic uppercase ml-1">USDT</span></h2>
+               </div>
+               <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20 shadow-xl"><TrendingUp size={28} /></div>
+            </div>
+            
+            <div className="flex gap-4 pt-2">
+               <button onClick={onShowRecharge} className="flex-1 bg-white text-blue-700 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-blue-50 transition-all shadow-xl"><ArrowUpRight size={18} /> {t('recharge')}</button>
+               <button onClick={onShowWithdraw} className="flex-1 bg-blue-500/30 text-white border border-white/20 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 backdrop-blur-md hover:bg-white/10 transition-all">{t('withdraw')}</button>
+            </div>
+         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+         <StatCard icon={Coins} label={lang === 'ar' ? 'أرباح الفريق' : 'Team Profit'} value={user.referralEarnings} color="text-emerald-500" bg="bg-emerald-500/10" />
+         <StatCard icon={Cpu} label={lang === 'ar' ? 'الماكينات' : 'Runners'} value={user.ownedMachines.length} color="text-blue-500" bg="bg-blue-500/10" />
+      </div>
+
+      <div className="space-y-4">
+         <div className="flex justify-between items-center px-1">
+            <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] italic">{t('history')}</h4>
+            <History size={16} className="text-slate-500" />
+         </div>
+         <div className="space-y-3">
+            {user.transactions.slice(0, 5).map((tx: any) => (
+               <div key={tx.id} className="bg-[#0b0f1a] p-5 rounded-3xl border border-white/5 flex justify-between items-center shadow-lg hover:border-white/10 transition-all">
+                  <div className="flex items-center gap-4">
+                     <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${tx.amount > 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                        {tx.type === 'deposit' ? <Zap size={20} /> : tx.type === 'withdrawal' ? <ExternalLink size={20} /> : <TrendingUp size={20} />}
+                     </div>
+                     <div>
+                        <p className="text-white font-black text-sm uppercase italic">{String(tx.type)}</p>
+                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">{new Date(tx.date).toLocaleDateString()}</p>
+                     </div>
+                  </div>
+                  <div className="text-right">
+                     <p className={`font-black text-lg italic ${tx.amount > 0 ? 'text-emerald-500' : 'text-red-500'}`}>{tx.amount > 0 ? '+' : ''}{Number(tx.amount).toFixed(2)}</p>
+                     <p className={`text-[8px] font-black uppercase tracking-widest mt-0.5 ${tx.status === 'completed' ? 'text-emerald-600' : 'text-orange-500'}`}>{tx.status}</p>
+                  </div>
+               </div>
+            ))}
+            {user.transactions.length === 0 && (
+               <div className="py-12 text-center opacity-20"><History size={40} className="mx-auto mb-2" /><p className="text-[10px] font-black uppercase">No Data Packets Found</p></div>
+            )}
+         </div>
+      </div>
+    </div>
+  );
+};
+
+const MachinesView = ({ user, onBuy, t, lang }: any) => {
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500 pb-10">
+      <div className="px-1 flex items-center gap-3">
+         <div className="w-10 h-10 bg-blue-600/20 text-blue-500 rounded-xl flex items-center justify-center"><Layers size={20}/></div>
+         <div>
+            <h3 className="text-white font-black italic uppercase tracking-wider">{t('machines')}</h3>
+            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Hardware Grid v3.0</p>
+         </div>
+      </div>
+
+      <div className="space-y-6">
+        {MACHINES.map(m => (
+          <div key={m.id} className={`bg-gradient-to-br ${m.color} p-7 rounded-[2.5rem] border border-white/10 space-y-6 shadow-2xl relative overflow-hidden group`}>
+             <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700"><Cpu size={120} /></div>
+             <div className="relative z-10">
+                <div className="flex justify-between items-start">
+                   <div>
+                      <h4 className="text-white font-black text-xl italic uppercase tracking-tight">{m.name}</h4>
+                      <p className="text-[10px] text-white/50 font-black uppercase tracking-widest mt-1">Lifecycle: {m.duration} days</p>
+                   </div>
+                   <div className="text-right">
+                      <p className="text-2xl font-black text-white italic">{m.price} <span className="text-xs opacity-50 not-italic">USDT</span></p>
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-6">
+                   <div className="bg-black/20 backdrop-blur-sm p-4 rounded-2xl border border-white/5 text-center">
+                      <p className="text-[9px] text-white/50 font-black uppercase mb-1">Daily Yield</p>
+                      <p className="text-lg font-black text-emerald-400 italic">+{m.dailyProfit} <span className="text-[10px]">USDT</span></p>
+                   </div>
+                   <div className="bg-black/20 backdrop-blur-sm p-4 rounded-2xl border border-white/5 text-center">
+                      <p className="text-[9px] text-white/50 font-black uppercase mb-1">Total ROI</p>
+                      <p className="text-lg font-black text-blue-400 italic">{(m.dailyProfit * m.duration).toFixed(1)} <span className="text-[10px]">USDT</span></p>
+                   </div>
+                </div>
+
+                <p className="text-[11px] text-white/70 italic leading-relaxed mt-6 line-clamp-2">{m.description}</p>
+
+                <button onClick={() => onBuy(m)} className="w-full mt-6 bg-white text-slate-900 py-4.5 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-2 group">
+                   <Zap size={16} className="fill-current" /> {t('buyNow')}
+                </button>
+             </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const TasksView = ({ user, onComplete, t, lang }: any) => {
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-500 pb-10">
+       <div className="px-1 flex items-center gap-3">
+          <div className="w-10 h-10 bg-emerald-600/20 text-emerald-500 rounded-xl flex items-center justify-center"><Award size={22}/></div>
+          <div>
+             <h3 className="text-white font-black italic uppercase tracking-wider">{t('tasks')}</h3>
+             <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Active Harvesting Nodes</p>
+          </div>
+       </div>
+
+       {user.ownedMachines.length === 0 ? (
+          <div className="bg-[#0b0f1a] p-12 rounded-[2.5rem] border border-white/5 text-center space-y-6 shadow-xl">
+             <div className="w-20 h-20 bg-slate-500/10 text-slate-500 rounded-3xl flex items-center justify-center mx-auto opacity-30"><Cpu size={40} /></div>
+             <p className="text-slate-500 text-sm font-black uppercase italic tracking-widest leading-relaxed">No hardware detected in current matrix.</p>
+             <button onClick={() => window.location.hash = '#/machines'} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Purchase Core</button>
+          </div>
+       ) : (
+          <div className="space-y-4">
+             {user.ownedMachines.map((um: any) => {
+                const m = MACHINES.find(x => x.id === um.machine_id);
+                if (!m) return null;
+                const canClaim = !um.last_claim_date || (Date.now() - new Date(um.last_claim_date).getTime() > 24 * 60 * 60 * 1000);
+                
+                return (
+                   <div key={um.id} className="bg-[#0b0f1a] p-6 rounded-[2rem] border border-white/5 space-y-5 shadow-xl relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:rotate-12 transition-all"><Settings size={80} /></div>
+                      <div className="flex justify-between items-center relative z-10">
+                         <div>
+                            <h4 className="text-white font-black text-sm uppercase italic tracking-tight">{m.name}</h4>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">Cycles remaining: <span className="text-blue-500 ml-1">{um.remaining_days}</span></p>
+                         </div>
+                         <div className="text-right">
+                            <p className="text-xl font-black text-emerald-500 italic">+{m.dailyProfit} <span className="text-[10px] opacity-60">USDT</span></p>
+                         </div>
+                      </div>
+
+                      <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                         <div className="h-full bg-blue-600" style={{ width: `${(um.remaining_days / m.duration) * 100}%` }}></div>
+                      </div>
+
+                      <button onClick={() => onComplete(um)} disabled={!canClaim} className={`w-full py-4.5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-2 ${canClaim ? 'bg-emerald-600 text-white active:scale-95' : 'bg-slate-500/10 text-slate-500 opacity-50 cursor-not-allowed'}`}>
+                         <RefreshCw size={16} className={canClaim ? '' : 'animate-spin'} /> {canClaim ? t('completeTask') : (lang === 'ar' ? 'انتظر للدورة القادمة' : 'In Progress')}
+                      </button>
+                   </div>
+                );
+             })}
+          </div>
+       )}
+    </div>
+  );
+};
+
+const TeamView = ({ user, t, lang, showToast }: any) => {
+  const share = () => {
+    navigator.clipboard.writeText(`${window.location.origin}/#/register?ref=${user.referral_code}`);
+    showToast(lang === 'ar' ? "تم نسخ الرابط" : "Link Copied", "success");
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+       <div className="px-1 flex items-center gap-3">
+          <div className="w-10 h-10 bg-purple-600/20 text-purple-500 rounded-xl flex items-center justify-center"><Users size={22}/></div>
+          <div>
+             <h3 className="text-white font-black italic uppercase tracking-wider">{t('team')}</h3>
+             <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Referral Network Node</p>
+          </div>
+       </div>
+
+       <div className="bg-[#0b0f1a] p-8 rounded-[2.5rem] border border-white/5 space-y-6 text-center shadow-2xl relative overflow-hidden group">
+          <div className="absolute top-0 left-0 w-32 h-32 bg-purple-600/10 rounded-full -ml-16 -mt-16 blur-3xl"></div>
+          <div className="relative z-10 space-y-4">
+             <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600/20 text-purple-400 rounded-full border border-purple-500/20">
+                <BadgeCheck size={14} />
+                <span className="text-[9px] font-black uppercase tracking-widest">Affiliate Program</span>
+             </div>
+             <h2 className="text-white font-black text-2xl uppercase italic tracking-tighter">EARN {REFERRAL_PERCENT * 100}% BONUS</h2>
+             <p className="text-slate-500 text-xs font-bold leading-relaxed px-4">
+                شارك رابطك الخاص وكن جزءاً من نظام التوزيع المالي لشبكة MINEPRO.
+             </p>
+          </div>
+
+          <div className="bg-black/40 p-5 rounded-2xl border border-white/5 flex items-center justify-between group-hover:border-purple-500/30 transition-all cursor-pointer" onClick={share}>
+             <div className="text-left overflow-hidden">
+                <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Your Code</p>
+                <p className="text-xl font-black text-white italic tracking-widest truncate">{user.referral_code}</p>
+             </div>
+             <div className="p-3 bg-purple-600 rounded-xl text-white shadow-lg active:scale-95 transition-all"><Copy size={20}/></div>
+          </div>
+       </div>
+
+       <div className="bg-gradient-to-br from-purple-600/10 to-transparent p-7 rounded-[2.5rem] border border-white/5 flex justify-between items-center shadow-xl">
+          <div className="flex items-center gap-4">
+             <div className="w-12 h-12 bg-purple-600/20 text-purple-500 rounded-2xl flex items-center justify-center shadow-inner"><Gem size={24}/></div>
+             <div>
+                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Bonus Pool</p>
+                <p className="text-2xl font-black text-white italic">{(user.referralEarnings || 0).toFixed(2)} <span className="text-[10px] opacity-40 not-italic uppercase">USDT</span></p>
+             </div>
+          </div>
+          <button className="p-4 bg-purple-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all"><TrendingUp size={20}/></button>
+       </div>
+    </div>
+  );
+};
+
+const ProfileLink = ({ icon: Icon, label, subLabel }: any) => (
+  <button className="w-full p-6 flex items-center justify-between hover:bg-white/5 transition-all border-b border-white/5 last:border-none group">
+     <div className="flex items-center gap-4">
+        <div className="w-11 h-11 bg-white/5 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600/10 group-hover:text-blue-500 transition-all"><Icon size={20}/></div>
+        <div className="text-left">
+           <p className="text-sm font-black text-white uppercase italic">{label}</p>
+           <p className="text-[9px] text-slate-600 font-bold uppercase">{subLabel}</p>
+        </div>
+     </div>
+     <ArrowUpRight size={18} className="text-slate-800 group-hover:text-blue-500 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
+  </button>
+);
+
+const ProfileView = ({ user, t, lang }: any) => {
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+       <div className="flex flex-col items-center text-center space-y-4">
+          <div className="relative group">
+             <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-blue-800 rounded-[2rem] flex items-center justify-center text-white text-4xl font-black italic shadow-2xl group-hover:scale-105 transition-all duration-500 border-4 border-[#020617] relative z-10">
+                {user.first_name ? user.first_name[0] : 'U'}
+             </div>
+             <div className="absolute inset-0 bg-blue-500/30 rounded-[2rem] blur-2xl animate-pulse"></div>
+          </div>
+          <div>
+             <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter">{user.first_name}</h2>
+             <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] mt-1 italic">{user.email}</p>
+          </div>
+       </div>
+
+       <div className="grid grid-cols-2 gap-4">
+          <StatCard icon={Coins} label={lang === 'ar' ? 'إجمالي الشحن' : 'Total Deposit'} value={user.totalRecharge} color="text-white" bg="bg-blue-600" />
+          <StatCard icon={ExternalLink} label={lang === 'ar' ? 'إجمالي السحب' : 'Total Withdraw'} value={user.totalWithdraw} color="text-red-500" bg="bg-red-500/10" />
+       </div>
+
+       <div className="bg-[#0b0f1a] rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl">
+          <ProfileLink icon={ShieldCheck} label={lang === 'ar' ? 'تعديل البيانات' : 'Security Terminal'} subLabel="Update info" />
+          <ProfileLink icon={HelpCircle} label={lang === 'ar' ? 'الأسئلة الشائعة' : 'Central FAQ'} subLabel="Get help" />
+          <ProfileLink icon={Headphones} label={lang === 'ar' ? 'الدعم الفني' : 'Direct Support'} subLabel="Talk to us" />
+          <ProfileLink icon={Info} label={lang === 'ar' ? 'حول النظام' : 'About System'} subLabel="Version 3.0" />
+       </div>
+
+       <div className="text-center pb-10">
+          <p className="text-[9px] text-slate-700 font-black uppercase tracking-[0.5em] italic">Protocol Signature: {user.id.substring(0, 12)}</p>
+       </div>
+    </div>
+  );
+};
+
+const NavItem = ({ icon: Icon, label, active, onClick }: any) => (
+  <button onClick={onClick} className="flex flex-col items-center gap-1.5 group relative">
+    <div className={`p-2.5 rounded-2xl transition-all duration-300 ${active ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)] scale-110' : 'text-slate-500 group-hover:text-blue-400 group-hover:bg-white/5'}`}>
+      <Icon size={22} className={active ? 'fill-current' : ''} />
+    </div>
+    <span className={`text-[8px] font-black uppercase tracking-widest transition-all duration-300 ${active ? 'text-blue-500' : 'text-slate-700 opacity-0 group-hover:opacity-100'}`}>{label}</span>
+    {active && <div className="absolute -bottom-1 w-1 h-1 bg-blue-500 rounded-full"></div>}
+  </button>
+);
 
 export default App;
