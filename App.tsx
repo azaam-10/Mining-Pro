@@ -750,71 +750,88 @@ const ProtocolLoadingScreen = () => (
 );
 
 const RechargeModal = ({ onClose, onDeposit, showToast, userId, lang }: any) => {
-  const [amount, setAmount] = useState('');
-  const [proofUrl, setProofUrl] = useState('');
+  const [amount, setAmount] = useState('0.00');
+  const [proof, setProof] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleDeposit = async () => {
-    const amt = Number(amount);
-    if (isNaN(amt) || amt <= 0) return showToast(lang === 'ar' ? 'أدخل مبلغا صالحا' : 'Enter a valid amount', 'error');
-    if (!proofUrl) return showToast(lang === 'ar' ? 'يرجى إرفاق رابط إثبات الدفع' : 'Please provide proof URL', 'error');
-    
-    setLoading(true);
-    try {
-      const { error } = await supabase.from('transactions').insert({
-        user_id: userId,
-        type: 'deposit',
-        amount: amt,
-        status: 'pending',
-        proof_url: proofUrl,
-        date: new Date().toISOString()
-      });
-      if (error) throw error;
-      showToast(lang === 'ar' ? "تم إرسال طلب الإيداع للمراجعة" : "Deposit requested", "success");
-      onDeposit();
-      onClose();
-    } catch (e: any) {
-      showToast(e, "error");
-    } finally {
-      setLoading(false);
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setProof(reader.result as string);
+      reader.readAsDataURL(file);
     }
   };
 
+  const handleSubmit = async () => {
+    if (!proof) return showToast(lang === 'ar' ? 'يرجى إرفاق الصورة' : 'Attach proof', 'error');
+    setLoading(true);
+    try {
+      await supabase.from('transactions').insert({ 
+        user_id: userId, 
+        type: 'deposit', 
+        amount: Number(amount), 
+        status: 'pending', 
+        proof_url: proof 
+      });
+      showToast(lang === 'ar' ? "تم إرسال الطلب بنجاح" : "Deposit requested", "success");
+      onDeposit();
+      onClose();
+    } catch (e: any) { showToast(e, "error"); }
+    finally { setLoading(false); }
+  };
+
   return (
-    <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in">
-       <div className="bg-[#111827] w-full max-w-md rounded-[3rem] border border-white/10 p-8 space-y-6 relative shadow-2xl">
-          <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-white/5 rounded-2xl text-slate-400 hover:text-white transition-all"><X size={20}/></button>
+    <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-5 animate-in fade-in">
+       <div className="bg-[#111827] w-full max-w-md rounded-[3rem] border border-white/10 p-8 space-y-7 relative overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+          <button onClick={onClose} className="absolute top-6 right-6 p-2.5 bg-white/5 rounded-2xl text-slate-400 hover:text-white transition-all"><X size={20}/></button>
           
-          <h3 className="text-2xl font-black italic text-white uppercase text-center tracking-widest">{lang === 'ar' ? 'إيداع رصيد' : 'RECHARGE'}</h3>
-          
-          <div className="bg-blue-600/10 p-6 rounded-[2rem] border border-blue-500/20 space-y-4">
-             <div className="space-y-1 text-center">
-                <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Deposit Network</p>
-                <p className="text-white font-black italic">{NETWORK}</p>
-             </div>
-             <div className="bg-black/40 p-4 rounded-2xl border border-white/5 space-y-2">
-                <p className="text-[9px] text-slate-500 font-black uppercase text-center">USDT Deposit Address</p>
-                <div className="flex items-center justify-between gap-3">
-                   <p className="text-[10px] font-mono text-blue-400 break-all select-all">{DEPOSIT_ADDRESS}</p>
-                   <button onClick={() => { navigator.clipboard.writeText(DEPOSIT_ADDRESS); showToast("Copied", "success"); }} className="p-2 bg-white/10 text-white rounded-lg shrink-0"><Copy size={14}/></button>
-                </div>
-             </div>
+          <div className="text-center space-y-1">
+             <h3 className="text-2xl font-black italic tracking-widest text-white uppercase">شحن الرصيد</h3>
+             <p className="text-[10px] text-blue-500 font-black tracking-widest uppercase opacity-70">NETWORK: BEP20 (BSC)</p>
+          </div>
+
+          <div className="bg-[#1f2937]/50 p-5 rounded-3xl border border-white/5 flex items-center justify-between gap-3 group">
+             <p className="text-[11px] font-mono text-blue-400 break-all select-all flex-1">{DEPOSIT_ADDRESS}</p>
+             <button onClick={() => { navigator.clipboard.writeText(DEPOSIT_ADDRESS); showToast('Address Copied', 'success'); }} className="p-2.5 bg-blue-600/20 text-blue-500 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Copy size={16}/></button>
+          </div>
+
+          <div className="space-y-2 text-right px-1">
+             <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">المبلغ المودع</p>
+             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-black/40 border-none outline-none text-4xl font-black italic text-center py-6 rounded-3xl text-white placeholder-white/20" placeholder="0.00" />
           </div>
 
           <div className="space-y-4">
-             <div className="space-y-2">
-                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest px-2">{lang === 'ar' ? 'الكمية المرسلة' : 'AMOUNT SENT (USDT)'}</p>
-                <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="10.00" className="w-full bg-[#020617]/60 border border-white/5 p-5 rounded-2xl text-white outline-none font-black italic text-xl placeholder-white/10 focus:border-blue-500/30 transition-all" />
-             </div>
+            <div className="flex items-center justify-end gap-2 px-1 text-slate-500">
+               <p className="text-[10px] font-black uppercase tracking-widest">إرفاق لقطة شاشة للإثبات</p>
+            </div>
+            
+            <div className="bg-blue-600/10 p-5 rounded-3xl border border-blue-500/20 flex items-start gap-4 text-right">
+               <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0 mt-1">
+                  <Info size={18} className="text-blue-500" />
+               </div>
+               <p className="text-[10px] text-blue-100 font-bold leading-relaxed italic">يجب إرفاق لقطة شاشة واضحة من محفظتك توضح تفاصيل عملية التحويل (مكتملة) لضمان سرعة معالجة الطلب.</p>
+            </div>
 
-             <div className="space-y-2">
-                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest px-2">{lang === 'ar' ? 'رابط صورة الإثبات' : 'PROOF IMAGE URL'}</p>
-                <input value={proofUrl} onChange={e => setProofUrl(e.target.value)} placeholder="https://..." className="w-full bg-[#020617]/60 border border-white/5 p-5 rounded-2xl text-white outline-none font-mono text-sm placeholder-white/10 focus:border-blue-500/30 transition-all" />
-             </div>
+            <div onClick={() => fileRef.current?.click()} className="w-full h-44 bg-white/5 border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center cursor-pointer group hover:border-blue-500/50 transition-all overflow-hidden relative">
+               {proof ? <img src={proof} className="w-full h-full object-cover" /> : <>
+                 <div className="w-16 h-16 rounded-full bg-blue-600/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                    <ImageIcon size={32} className="text-blue-500" />
+                 </div>
+                 <p className="text-[11px] text-slate-400 font-black uppercase group-hover:text-blue-400">اضغط لاختيار صورة</p>
+               </>}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
           </div>
 
-          <button onClick={handleDeposit} disabled={loading} className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black text-[13px] uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all">
-             {loading ? <Loader2 className="animate-spin mx-auto" /> : (lang === 'ar' ? 'تأكيد الإرسال' : 'CONFIRM DEPOSIT')}
+          <div className="flex items-center justify-center gap-2 py-2 opacity-50">
+             <Lock size={12} className="text-emerald-500" />
+             <p className="text-[9px] font-black uppercase text-emerald-500 tracking-tighter">بروتوكول تشفير الإيداع نشط ومؤمن بالكامل</p>
+          </div>
+
+          <button onClick={handleSubmit} disabled={loading} className="w-full bg-blue-600 py-5 rounded-[2rem] font-black text-white uppercase tracking-[0.3em] shadow-[0_10px_30px_rgba(37,99,235,0.4)] active:scale-95 transition-all">
+             {loading ? <Loader2 className="animate-spin mx-auto" /> : (lang === 'ar' ? 'تأكيد' : 'CONFIRM')}
           </button>
        </div>
     </div>
