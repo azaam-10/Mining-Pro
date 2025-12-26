@@ -8,7 +8,7 @@ import {
   Briefcase, History, Eye, Search, Check, XCircle, Image as ImageIcon,
   Upload, Camera, Headphones, Calendar, ArrowUpRight, Award, Gem, Layers,
   Info as InfoIcon, Lock, ShieldAlert, BadgeCheck, ExternalLink, Mail, Clock,
-  AlertCircle, HelpCircle, LifeBuoy
+  AlertCircle, HelpCircle, LifeBuoy, Coins
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL, REFERRAL_PERCENT } from './constants';
@@ -350,7 +350,7 @@ const AdminView = ({ t, showToast, lang, adminId }: any) => {
 
   return (
     <div className="space-y-8 animate-in fade-in pb-16">
-       {selectedUserDetails && <UserDetailsModal userId={selectedUserDetails} onClose={() => setSelectedUserDetails(null)} lang={lang} />}
+       {selectedUserDetails && <UserDetailsModal userId={selectedUserDetails} onClose={() => setSelectedUserDetails(null)} lang={lang} showToast={showToast} />}
 
        <div className="bg-[#0b0f1a] p-2 rounded-[2rem] border border-white/5 flex gap-1.5 shadow-2xl overflow-x-auto no-scrollbar">
          <button onClick={() => setMainTab('deposit')} className={`flex-1 min-w-[80px] py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all ${mainTab === 'deposit' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>{lang === 'ar' ? 'إيداع' : 'Dep'}</button>
@@ -451,22 +451,61 @@ const AdminView = ({ t, showToast, lang, adminId }: any) => {
   );
 };
 
-const UserDetailsModal = ({ userId, onClose, lang }: { userId: string, onClose: () => void, lang: Language }) => {
+const UserDetailsModal = ({ userId, onClose, lang, showToast }: { userId: string, onClose: () => void, lang: Language, showToast: any }) => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [sendAmount, setSendAmount] = useState('');
+  const [isSending, setIsSending] = useState(false);
+
+  const fetch = useCallback(async () => {
+    const [p, m, t] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', userId).single(),
+      supabase.from('user_machines').select('*').eq('user_id', userId),
+      supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false })
+    ]);
+    if (p.data) setData({ ...p.data, machines: m.data || [], txs: t.data || [] });
+    setLoading(false);
+  }, [userId]);
 
   useEffect(() => {
-    const fetch = async () => {
-      const [p, m, t] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', userId).single(),
-        supabase.from('user_machines').select('*').eq('user_id', userId),
-        supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false })
-      ]);
-      if (p.data) setData({ ...p.data, machines: m.data || [], txs: t.data || [] });
-      setLoading(false);
-    };
     fetch();
-  }, [userId]);
+  }, [fetch]);
+
+  const handleSendFunds = async () => {
+    const amount = Number(sendAmount);
+    if (!amount || amount <= 0) {
+      return showToast(lang === 'ar' ? "يرجى إدخال مبلغ صحيح" : "Invalid amount", "error");
+    }
+    
+    setIsSending(true);
+    try {
+      // 1. تحديث رصيد الملف الشخصي
+      const { error: updErr } = await supabase.from('profiles').update({ 
+        balance: Number(data.balance || 0) + amount,
+        total_recharge: Number(data.total_recharge || 0) + amount
+      }).eq('id', userId);
+      
+      if (updErr) throw updErr;
+
+      // 2. إضافة سجل معاملة يدوية
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        type: 'deposit',
+        amount: amount,
+        status: 'completed',
+        details: 'Admin Manual Credit',
+        date: new Date().toISOString()
+      });
+
+      showToast(lang === 'ar' ? "تم إرسال المبلغ بنجاح" : "Funds sent successfully", "success");
+      setSendAmount('');
+      fetch(); // تحديث البيانات المعروضة
+    } catch (e: any) {
+      showToast(e, "error");
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   if (loading) return (
     <div className="fixed inset-0 z-[210] bg-black/95 flex items-center justify-center backdrop-blur-md">
@@ -526,6 +565,33 @@ const UserDetailsModal = ({ userId, onClose, lang }: { userId: string, onClose: 
                    <Clock size={14} className="text-slate-500" />
                    <p className="text-[9px] text-slate-400 font-black">{new Date(data.created_at).toLocaleDateString()}</p>
                 </div>
+             </div>
+          </div>
+
+          {/* New Feature: Manual Fund Injection */}
+          <div className="bg-[#0b0f1a] p-6 rounded-[2rem] border border-blue-500/20 space-y-4 shadow-xl">
+             <div className="flex items-center gap-2 px-1">
+                <Coins size={16} className="text-blue-500" />
+                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">{lang === 'ar' ? 'إرسال مبلغ (شحن يدوي)' : 'MANUAL FUND INJECTION'}</h4>
+             </div>
+             <div className="flex gap-3">
+                <div className="flex-1 relative">
+                   <input 
+                      type="number" 
+                      placeholder="0.00" 
+                      value={sendAmount} 
+                      onChange={e => setSendAmount(e.target.value)}
+                      className="w-full bg-black/50 border border-white/10 p-4 rounded-2xl text-white font-black outline-none focus:border-blue-500/50 pr-12" 
+                   />
+                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-blue-500 uppercase">USDT</span>
+                </div>
+                <button 
+                   onClick={handleSendFunds} 
+                   disabled={isSending}
+                   className="bg-blue-600 text-white px-6 rounded-2xl shadow-lg active:scale-95 transition-all flex items-center justify-center min-w-[100px]"
+                >
+                   {isSending ? <Loader2 className="animate-spin" size={18}/> : <Send size={18}/>}
+                </button>
              </div>
           </div>
 
