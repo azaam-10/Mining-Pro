@@ -17,8 +17,8 @@ const generateMachines = (): Machine[] => {
     price: 0,
     dailyProfit: 0.5,
     duration: 15,
-    description: "ماكينة تجريبية مجانية لجميع المستخدمين لبدء رحلة التعدين",
-    color: "from-slate-500/20 to-slate-600/40"
+    description: "ماكينة تجريبية مجانية لبدء رحلة التعدين",
+    color: "tier-bronze-fx"
   });
 
   const prices: number[] = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000, 2000, 3000, 4000, 5000, 10000];
@@ -29,17 +29,15 @@ const generateMachines = (): Machine[] => {
 
     let name = "";
     let color = "";
-    let desc = "تحويل الأصول الرقمية إلى سيولة مشروعة عبر شبكتنا الموزعة";
-
     if (price <= 100) {
       name = `BRONZE CORE v${index + 1}`;
-      color = "from-blue-500/20 to-blue-600/40";
+      color = "tier-bronze-fx";
     } else if (price <= 1000) {
       name = `SILVER TITAN x${index}`;
-      color = "from-emerald-500/20 to-emerald-600/40";
+      color = "tier-gold-fx";
     } else {
       name = `GOLDEN QUANTUM`;
-      color = "from-purple-500/20 to-purple-600/40";
+      color = "tier-platinum-fx";
     }
 
     machines.push({
@@ -48,7 +46,7 @@ const generateMachines = (): Machine[] => {
       price: price,
       dailyProfit: dailyProfit,
       duration: duration,
-      description: desc,
+      description: "تحويل الأصول الرقمية إلى سيولة مشروعة عبر شبكتنا الموزعة",
       color: color 
     });
   });
@@ -73,11 +71,11 @@ export const TRANSLATIONS: Translations = {
   owned: { en: "Running", ar: "نشط" },
   completeTask: { en: "Harvest", ar: "استلام" },
   supportChat: { en: "Support", ar: "الدعم الفني" },
-  stuckFunds: { en: "Stuck Funds?", ar: "هل لديك أموال عالقة؟" },
+  stuckFunds: { en: "Stuck Funds?", ar: "هل لديك أموال عالقه؟" },
   secureSystem: { en: "Secure System", ar: "نظام آمن ومستقر" },
   needHelp: { en: "Need Help?", ar: "هل تحتاج مساعدة؟" },
   stuckFundsDesc: { 
-    en: "If you have trouble withdrawing from other platforms, we are here to help.", 
+    en: "If you face trouble withdrawing from any platform, we are here for consultation.", 
     ar: "إذا كنت تواجه مشكله في سحب اموالك من أي منصه مهام أخرى فنحن هنا للمساعده فريقنا المتخصص يمكنه تقديم الدعم والمشورة لاستعادة حقوقك" 
   },
   secureSystemDesc: { en: "Your data is encrypted with military-grade protocols", ar: "بياناتك مشفرة بالكامل بأعلى معايير الأمان العالمية" },
