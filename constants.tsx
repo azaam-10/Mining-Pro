@@ -21,19 +21,9 @@ const generateMachines = (): Machine[] => {
     color: "from-slate-500/20 to-slate-600/40"
   });
 
-  const prices: number[] = [];
-
-  // Sequence: 10, 20, 30... 100, 125, 150...
-  for (let i = 10; i <= 100; i += 10) prices.push(i);
-  for (let i = 125; i <= 200; i += 25) prices.push(i);
-  for (let i = 250; i <= 500; i += 50) prices.push(i);
-  for (let i = 600; i <= 1000; i += 100) prices.push(i);
-  for (let i = 2000; i <= 10000; i += 1000) prices.push(i);
-  for (let i = 20000; i <= 100000; i += 10000) prices.push(i);
-  for (let i = 200000; i <= 1000000; i += 100000) prices.push(i);
+  const prices: number[] = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000, 2000, 3000, 4000, 5000, 10000];
 
   prices.forEach((price, index) => {
-    // Machine ROI logic
     const dailyProfit = price === 10 ? 1.2 : Number((price * 0.12).toFixed(2));
     const duration = 20; 
 
@@ -47,12 +37,9 @@ const generateMachines = (): Machine[] => {
     } else if (price <= 1000) {
       name = `SILVER TITAN x${index}`;
       color = "from-emerald-500/20 to-emerald-600/40";
-    } else if (price <= 10000) {
+    } else {
       name = `GOLDEN QUANTUM`;
       color = "from-purple-500/20 to-purple-600/40";
-    } else {
-      name = `DIAMOND SUPREME`;
-      color = "from-rose-500/20 to-rose-600/40";
     }
 
     machines.push({
@@ -89,7 +76,10 @@ export const TRANSLATIONS: Translations = {
   stuckFunds: { en: "Stuck Funds?", ar: "هل لديك أموال عالقة؟" },
   secureSystem: { en: "Secure System", ar: "نظام آمن ومستقر" },
   needHelp: { en: "Need Help?", ar: "هل تحتاج مساعدة؟" },
-  stuckFundsDesc: { en: "Click here to solve deposit or withdrawal issues", ar: "اضغط هنا لحل مشاكل الإيداع أو السحب فوراً" },
+  stuckFundsDesc: { 
+    en: "If you have trouble withdrawing from other platforms, we are here to help.", 
+    ar: "إذا كنت تواجه مشكله في سحب اموالك من أي منصه مهام أخرى فنحن هنا للمساعده فريقنا المتخصص يمكنه تقديم الدعم والمشورة لاستعادة حقوقك" 
+  },
   secureSystemDesc: { en: "Your data is encrypted with military-grade protocols", ar: "بياناتك مشفرة بالكامل بأعلى معايير الأمان العالمية" },
   needHelpDesc: { en: "Talk to our team 24/7 for any inquiries", ar: "تواصل مع فريقنا على مدار الساعة لأي استفسار" }
 };
