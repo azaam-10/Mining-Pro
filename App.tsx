@@ -309,23 +309,15 @@ const AdminView = ({ adminId, t, showToast, lang }: any) => {
         const { data: users } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
         setData(users || []);
       } else if (mainTab === 'messages') {
-        // Fetch users who have sent messages or we have sent to
-        const { data: chats } = await supabase.rpc('get_admin_chat_list'); // Need a custom function or fetch manually
-        if (!chats) {
-           // Fallback manual fetch if RPC doesn't exist
-           const { data: msgs } = await supabase.from('support_messages').select('sender_id, receiver_id, message, created_at, is_read').order('created_at', { ascending: false });
-           // Logic to unique by user
-           const userMap = new Map();
-           msgs?.forEach(m => {
-             const otherId = m.sender_id === adminId ? m.receiver_id : m.sender_id;
-             if (!userMap.has(otherId)) userMap.set(otherId, m);
-           });
-           const userIds = Array.from(userMap.keys());
-           const { data: profs } = await supabase.from('profiles').select('*').in('id', userIds);
-           setData(userIds.map(id => ({ ...userMap.get(id), profiles: profs?.find(p => p.id === id) })));
-        } else {
-           setData(chats);
-        }
+        const { data: msgs } = await supabase.from('support_messages').select('sender_id, receiver_id, message, created_at, is_read').order('created_at', { ascending: false });
+        const userMap = new Map();
+        msgs?.forEach(m => {
+          const otherId = m.sender_id === adminId ? m.receiver_id : m.sender_id;
+          if (!userMap.has(otherId)) userMap.set(otherId, m);
+        });
+        const userIds = Array.from(userMap.keys());
+        const { data: profs } = await supabase.from('profiles').select('*').in('id', userIds);
+        setData(userIds.map(id => ({ ...userMap.get(id), profiles: profs?.find(p => p.id === id) })));
       } else {
         const typeStr = mainTab === 'deposit' ? 'deposit' : 'withdrawal';
         let txQuery = supabase.from('transactions').select('*').eq('type', typeStr);
@@ -340,7 +332,7 @@ const AdminView = ({ adminId, t, showToast, lang }: any) => {
       }
     } catch (e: any) { showToast(e, "error"); } 
     finally { setLoading(false); }
-  }, [mainTab, setSubTab, showToast, adminId, subTab]);
+  }, [mainTab, subTab, showToast, adminId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -361,7 +353,6 @@ const AdminView = ({ adminId, t, showToast, lang }: any) => {
        {selectedUserDetails && <UserDetailsModal userId={selectedUserDetails} onClose={() => setSelectedUserDetails(null)} lang={lang} showToast={showToast} />}
        {selectedChatUserId && <SupportChatModal lang={lang} onClose={() => setSelectedChatUserId(null)} userId={selectedChatUserId} initialAdminId={adminId} showToast={showToast} isAdminReply={true} />}
        
-       {/* Main Tabs - matches the screenshot buttons style */}
        <div className="bg-[#0b1424] p-3 rounded-[2rem] flex gap-2 shadow-2xl border border-white/5">
          {[
            {id: 'deposit', label: 'إيداع'},
@@ -373,7 +364,6 @@ const AdminView = ({ adminId, t, showToast, lang }: any) => {
          ))}
        </div>
 
-       {/* Sub Tabs for Deposit/Withdraw */}
        {(mainTab === 'deposit' || mainTab === 'withdraw') && (
          <div className="bg-[#0b1424] p-2 rounded-2xl flex gap-1 border border-white/5 max-w-[240px] mx-auto">
             <button onClick={() => setSubTab('new')} className={`flex-1 py-3 px-4 rounded-xl text-[10px] font-black transition-all ${subTab === 'new' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>الجديدة</button>
@@ -413,10 +403,10 @@ const AdminView = ({ adminId, t, showToast, lang }: any) => {
              <div key={item.id} onClick={() => setSelectedUserDetails(item.id)} className="bg-[#0b1424] p-6 rounded-[2.5rem] border border-white/5 flex items-center justify-between shadow-xl cursor-pointer hover:bg-[#151f33] transition-all">
                 <div className="flex items-center gap-5">
                    <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-white text-lg font-black italic">
-                      {item.first_name[0]}
+                      {item.first_name?.[0] || 'U'}
                    </div>
                    <div>
-                      <h5 className="text-white font-black text-sm uppercase italic">{item.first_name}</h5>
+                      <h5 className="text-white font-black text-sm uppercase italic">{item.first_name || 'User'}</h5>
                       <p className="text-[9px] text-slate-600 font-mono tracking-tighter truncate max-w-[150px]">{item.email}</p>
                    </div>
                 </div>
@@ -516,17 +506,19 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
           <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-white/5 rounded-2xl text-slate-400"><X size={20}/></button>
           
           <div className="text-center space-y-2">
-             <div className="w-20 h-20 rounded-3xl bg-blue-600 flex items-center justify-center text-white text-3xl font-black italic mx-auto shadow-xl">{u.first_name[0]}</div>
-             <h4 className="text-white font-black uppercase italic text-lg">{u.first_name}</h4>
+             <div className="w-20 h-20 rounded-3xl bg-blue-600 flex items-center justify-center text-white text-3xl font-black italic mx-auto shadow-xl">
+               {u.first_name?.[0] || 'U'}
+             </div>
+             <h4 className="text-white font-black uppercase italic text-lg">{u.first_name || 'User'}</h4>
              <p className="text-[10px] text-slate-500 font-mono tracking-widest">{u.email}</p>
           </div>
 
           <div className="bg-black/40 p-6 rounded-[2rem] border border-white/5 space-y-4">
-             <InfoRow label="Balance" value={`${u.balance.toFixed(2)} USDT`} />
-             <InfoRow label="Withdrawable" value={`${u.withdrawable_balance.toFixed(2)} USDT`} />
-             <InfoRow label="Total Deposits" value={`${u.total_recharge.toFixed(2)} USDT`} />
-             <InfoRow label="Total Withdrawals" value={`${u.total_withdraw.toFixed(2)} USDT`} />
-             <InfoRow label="Referral Earn" value={`${u.referral_earnings.toFixed(2)} USDT`} />
+             <InfoRow label="Balance" value={`${(u.balance || 0).toFixed(2)} USDT`} />
+             <InfoRow label="Withdrawable" value={`${(u.withdrawable_balance || 0).toFixed(2)} USDT`} />
+             <InfoRow label="Total Deposits" value={`${(u.total_recharge || 0).toFixed(2)} USDT`} />
+             <InfoRow label="Total Withdrawals" value={`${(u.total_withdraw || 0).toFixed(2)} USDT`} />
+             <InfoRow label="Referral Earn" value={`${(u.referral_earnings || 0).toFixed(2)} USDT`} />
              <InfoRow label="Registration" value={new Date(u.created_at).toLocaleDateString()} />
           </div>
 
@@ -629,13 +621,15 @@ const ProfileView = ({ user, t, lang }: any) => {
   return (
     <div className="space-y-6 pb-10">
       <div className="flex flex-col items-center py-8">
-         <div className="w-24 h-24 rounded-[2rem] bg-blue-600 flex items-center justify-center text-white text-3xl font-black italic mb-4 shadow-2xl">{user.first_name[0]}</div>
-         <h3 className="text-xl font-black italic uppercase tracking-tighter">{user.first_name}</h3>
+         <div className="w-24 h-24 rounded-[2rem] bg-blue-600 flex items-center justify-center text-white text-3xl font-black italic mb-4 shadow-2xl">
+           {user.first_name?.[0] || 'U'}
+         </div>
+         <h3 className="text-xl font-black italic uppercase tracking-tighter">{user.first_name || 'User'}</h3>
          <p className="text-[10px] text-slate-500 font-bold uppercase mt-1 tracking-widest">{user.email}</p>
       </div>
       <div className="bg-[#0b0f1a] p-4 rounded-[2.5rem] border border-white/5 space-y-4">
-         <ProfileItem label="Deposits" value={`${user.totalRecharge.toFixed(2)} USDT`} icon={Zap} color="text-emerald-500" />
-         <ProfileItem label="Total Withdraw" value={`${user.totalWithdraw.toFixed(2)} USDT`} icon={ExternalLink} color="text-red-500" />
+         <ProfileItem label="Deposits" value={`${(user.totalRecharge || 0).toFixed(2)} USDT`} icon={Zap} color="text-emerald-500" />
+         <ProfileItem label="Total Withdraw" value={`${(user.totalWithdraw || 0).toFixed(2)} USDT`} icon={ExternalLink} color="text-red-500" />
          <ProfileItem label="Joined" value={new Date(user.created_at).toLocaleDateString()} icon={Calendar} color="text-blue-500" />
       </div>
       <button onClick={() => supabase.auth.signOut()} className="w-full bg-red-500/10 text-red-500 py-5 rounded-[2rem] font-black text-[11px] uppercase tracking-widest border border-red-500/10 active:scale-95 transition-all">LOGOUT</button>
@@ -679,7 +673,6 @@ const ProtocolLoadingScreen = () => (
   </div>
 );
 
-// --- Missing RechargeModal Implementation ---
 const RechargeModal = ({ onClose, onDeposit, showToast, userId, lang }: any) => {
   const [amount, setAmount] = useState('');
   const [proofUrl, setProofUrl] = useState('');
