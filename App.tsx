@@ -422,8 +422,8 @@ const AdminView = ({ adminId, t, showToast, lang }: any) => {
                </div>
                
                <div className="flex justify-between items-start relative z-10">
-                 <div>
-                    <h5 className="text-white font-black text-2xl uppercase italic tracking-tighter">{item.profiles?.first_name || 'Protocol'}</h5>
+                 <div onClick={() => setSelectedUserDetails(item.user_id)} className="cursor-pointer hover:opacity-70 transition-opacity">
+                    <h5 className="text-white font-black text-2xl uppercase italic tracking-tighter underline decoration-blue-500/30 underline-offset-4">{item.profiles?.first_name || 'Protocol'}</h5>
                     <p className="text-[10px] text-slate-500 font-mono tracking-widest mt-1 uppercase">{item.profiles?.email}</p>
                  </div>
                  <div className="text-right">
