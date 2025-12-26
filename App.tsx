@@ -50,7 +50,6 @@ const App: React.FC = () => {
 
   const fetchAdminUUID = useCallback(async () => {
     try {
-      // محاولة جلب معرف المسؤول (قد يفشل للمستخدمين العاديين بسبب RLS)
       const { data } = await supabase.from('profiles').select('id').eq('email', ADMIN_EMAIL).maybeSingle();
       if (data) setAdminUUID(data.id);
     } catch (e) {}
@@ -265,15 +264,11 @@ const AdminView = ({ t, showToast, lang, adminId }: any) => {
         if (error) throw error;
         setData(users || []);
       } else if (mainTab === 'messages') {
-        // جلب الرسائل من كافة المستخدمين لفرزها في القائمة
         const { data: msgs } = await supabase.from('support_messages').select('*').order('created_at', { ascending: false });
         const { data: users } = await supabase.from('profiles').select('id, first_name, email');
         
         if (msgs && users) {
-          // استخراج كافة معرفات المستخدمين الذين شاركوا في المحادثات
           const uids = Array.from(new Set(msgs.map(m => m.sender_id === adminId ? m.receiver_id : m.sender_id))).filter(id => id && id !== adminId);
-          
-          // في حال وجود رسائل مرسلة "للنفس" (بروتوكول المستخدم المبتدئ)
           const selfMsgUids = msgs.filter(m => m.sender_id === m.receiver_id).map(m => m.sender_id);
           const allUids = Array.from(new Set([...uids, ...selfMsgUids]));
 
@@ -309,18 +304,41 @@ const AdminView = ({ t, showToast, lang, adminId }: any) => {
 
   const handleTx = async (tx: any, newStatus: 'completed' | 'failed') => {
     try {
+      // 1. تحديث حالة المعاملة أولاً
       const { error: txError } = await supabase.from('transactions').update({ status: newStatus }).eq('id', tx.id);
       if (txError) throw txError;
 
-      if (tx.type === 'deposit' && newStatus === 'completed') {
-        const { data: profile } = await supabase.from('profiles').select('balance, total_recharge').eq('id', tx.user_id).single();
+      // 2. تحديث الرصيد يدوياً في الملف الشخصي لضمان وصول المبلغ للمستخدم
+      if (newStatus === 'completed') {
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', tx.user_id).maybeSingle();
         if (profile) {
+          if (tx.type === 'deposit') {
+            const amount = Number(tx.amount);
+            // تحديث الرصيد الإجمالي وإجمالي الشحن
+            await supabase.from('profiles').update({ 
+              balance: Number(profile.balance || 0) + amount, 
+              total_recharge: Number(profile.total_recharge || 0) + amount 
+            }).eq('id', tx.user_id);
+          } else if (tx.type === 'withdrawal') {
+            // تحديث إجمالي السحب فقط لأن المبلغ تم خصمه مسبقاً عند طلب السحب
+            await supabase.from('profiles').update({ 
+              total_withdraw: Number(profile.total_withdraw || 0) + Math.abs(Number(tx.amount)) 
+            }).eq('id', tx.user_id);
+          }
+        }
+      } 
+      // 3. في حالة الرفض (للسحب فقط) نقوم بإعادة المبلغ للمستخدم
+      else if (newStatus === 'failed' && tx.type === 'withdrawal') {
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', tx.user_id).maybeSingle();
+        if (profile) {
+          const refundAmt = Math.abs(Number(tx.amount));
           await supabase.from('profiles').update({ 
-            balance: Number(profile.balance) + Math.abs(tx.amount),
-            total_recharge: Number(profile.total_recharge || 0) + Math.abs(tx.amount) 
+            balance: Number(profile.balance || 0) + refundAmt,
+            withdrawable_balance: Number(profile.withdrawable_balance || 0) + refundAmt
           }).eq('id', tx.user_id);
         }
       }
+
       showToast(lang === 'ar' ? "تم التحديث بنجاح" : "Success", "success");
       fetchData();
     } catch (e: any) { showToast(e, "error"); }
@@ -468,7 +486,6 @@ const UserDetailsModal = ({ userId, onClose, lang }: { userId: string, onClose: 
        </div>
 
        <div className="flex-1 overflow-y-auto p-6 space-y-8 no-scrollbar pb-10">
-          {/* Main Info */}
           <div className="bg-gradient-to-br from-blue-600/10 to-transparent p-7 rounded-[2.5rem] border border-blue-500/20 space-y-6 relative overflow-hidden">
              <div className="flex gap-6 items-center">
                 <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-2xl font-black italic shadow-2xl">{data.first_name ? data.first_name[0] : '?'}</div>
@@ -512,7 +529,6 @@ const UserDetailsModal = ({ userId, onClose, lang }: { userId: string, onClose: 
              </div>
           </div>
 
-          {/* Owned Machines */}
           <div className="space-y-4">
              <div className="flex items-center gap-2 px-1">
                 <Cpu size={16} className="text-blue-500" />
@@ -543,7 +559,6 @@ const UserDetailsModal = ({ userId, onClose, lang }: { userId: string, onClose: 
              )}
           </div>
 
-          {/* Transaction History */}
           <div className="space-y-4">
              <div className="flex items-center gap-2 px-1">
                 <History size={16} className="text-blue-500" />
@@ -710,7 +725,6 @@ const WithdrawModal = ({ onClose, userData, userId, showToast, lang }: any) => {
   const submit = async () => {
     const amt = Number(amount);
     
-    // Validate
     if (!amt || amt <= 0) {
       return setLocalError(lang === 'ar' ? "يرجى إدخال مبلغ صحيح" : "Invalid amount");
     }
@@ -733,7 +747,6 @@ const WithdrawModal = ({ onClose, userData, userId, showToast, lang }: any) => {
       });
       if (error) throw error;
 
-      // Update local and remote balance
       await supabase.from('profiles').update({ 
         balance: Number(userData.balance) - amt, 
         withdrawable_balance: Number(userData.withdrawableBalance) - amt 
@@ -825,7 +838,6 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowS
       </div>
     </div>
 
-    {/* رسالة استعادة الأموال العالقة */}
     <div className="bg-gradient-to-br from-red-600/10 to-blue-600/10 border border-white/5 rounded-[2.5rem] p-7 shadow-2xl relative overflow-hidden group">
        <div className="flex items-start gap-5 relative z-10">
           <div className="w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-[0_0_20px_rgba(220,38,38,0.4)] animate-pulse">
@@ -849,7 +861,6 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowS
        <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-600/5 blur-3xl rounded-full pointer-events-none"></div>
     </div>
 
-    {/* رسالة الطمأنينة الرئيسية */}
     <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-[2rem] p-6 shadow-xl relative overflow-hidden group">
        <div className="flex items-start gap-4 relative z-10">
           <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white shrink-0 shadow-lg">
@@ -937,7 +948,6 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
               key={m.id} 
               className={`bg-[#0b0f1a] rounded-[2.5rem] p-8 border border-white/5 space-y-6 shadow-2xl relative overflow-hidden transition-all hover:border-white/20 active:scale-[0.98] ${tierClass} ${owned ? 'ring-2 ring-blue-500/40 ring-offset-4 ring-offset-[#020617]' : ''}`}
             >
-               {/* Tier Header */}
                <div className="flex justify-between items-start relative z-10">
                   <div className="flex gap-4 items-center">
                     <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${m.color} flex items-center justify-center text-white shadow-xl animate-float`}>
@@ -956,7 +966,6 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
                   </div>
                </div>
 
-               {/* Stats Grid */}
                <div className="grid grid-cols-3 gap-3 relative z-10">
                   <div className="bg-black/40 border border-white/5 p-4 rounded-3xl text-center backdrop-blur-md">
                     <TrendingUp size={14} className="mx-auto mb-1.5 text-emerald-500" />
@@ -975,7 +984,6 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
                   </div>
                </div>
 
-               {/* Action Button */}
                <button 
                   onClick={() => !owned && onBuy(m)} 
                   disabled={owned} 
@@ -993,7 +1001,6 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
                   )}
                </button>
                
-               {/* Background Decorative Element */}
                <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/5 blur-3xl rounded-full pointer-events-none"></div>
             </div>
           );
@@ -1182,11 +1189,9 @@ const SupportChatModal = ({ userId, initialAdminId, onClose, lang, isAdminReply 
   const [adminId, setAdminId] = useState<string | null>(initialAdminId);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // وظيفة لجلب معرف المسؤول بشكل مستقل في حال عدم توفره
   const ensureAdminId = useCallback(async () => {
     if (adminId) return adminId;
     
-    // محاولة جلب المعرّف من تاريخ الرسائل (الأكثر موثوقية للمستخدم العادي)
     try {
       const { data } = await supabase
         .from('support_messages')
@@ -1204,7 +1209,6 @@ const SupportChatModal = ({ userId, initialAdminId, onClose, lang, isAdminReply 
       }
     } catch (e) {}
 
-    // محاولة أخيرة من جدول الملفات (قد يفشل بسبب RLS)
     try {
       const { data } = await supabase.from('profiles').select('id').eq('email', ADMIN_EMAIL).maybeSingle();
       if (data) {
@@ -1219,7 +1223,6 @@ const SupportChatModal = ({ userId, initialAdminId, onClose, lang, isAdminReply 
   const fetchMessages = useCallback(async () => {
     if (!userId) return;
     try {
-      // استعلام مرن يجلب كافة الرسائل المتعلقة بالمستخدم
       const { data, error } = await supabase
         .from('support_messages')
         .select('*')
@@ -1277,8 +1280,6 @@ const SupportChatModal = ({ userId, initialAdminId, onClose, lang, isAdminReply 
     try {
       let currentAdminId = await ensureAdminId();
       
-      // في حال كان المستخدم مبتدئاً ولا يوجد تاريخ رسائل، نرسل الرسالة لنفس المستخدم
-      // وسيقوم المسؤول بالتقاطها من سجلات "الرسائل الموجهة للذات" (بروتوكول النداء الأول)
       const targetReceiverId = isAdminReply ? userId : (currentAdminId || userId);
       const targetSenderId = isAdminReply ? (currentAdminId || userId) : userId;
 
@@ -1308,7 +1309,6 @@ const SupportChatModal = ({ userId, initialAdminId, onClose, lang, isAdminReply 
       
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-7 space-y-5 no-scrollbar bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
         {messages.map((m, i) => {
-          // تمييز رسائل المستخدم عن رسائل النظام/المسؤول
           const isMe = m.sender_id === userId;
           return (
             <div key={m.id || i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
