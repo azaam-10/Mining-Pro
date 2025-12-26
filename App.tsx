@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, Navigate, useSearchParams } from 'react-router-dom';
 import { 
   Home as HomeIcon, Cpu, ListTodo, Users, User as UserIcon, 
   Loader2, ShieldCheck, X, Copy, Zap, Settings, RefreshCw, 
@@ -14,6 +14,43 @@ import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL, R
 import { supabase } from './supabase';
 
 interface Toast { message: string; type: 'success' | 'error' | 'info'; id: number; }
+
+// --- Shared Helper Components ---
+
+const NavItem = ({ icon: Icon, label, active, onClick }: any) => (
+  <button onClick={onClick} className="flex flex-col items-center gap-1 group">
+    <div className={`p-3 rounded-2xl transition-all ${active ? 'bg-blue-600 text-white shadow-[0_5px_15px_rgba(37,99,235,0.4)] scale-110' : 'text-slate-500 hover:text-blue-400'}`}>
+      <Icon size={22} className={active ? 'fill-current' : ''} />
+    </div>
+    <span className={`text-[8px] font-black uppercase tracking-widest transition-colors ${active ? 'text-blue-500' : 'text-slate-700'}`}>{label}</span>
+  </button>
+);
+
+const ProfileStatCard = ({ label, value, color }: any) => (
+  <div className="bg-[#020617]/60 p-5 rounded-[1.8rem] border border-white/5 text-center space-y-2">
+     <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">{label}</p>
+     <p className={`text-xl font-black italic tracking-tight ${color}`}>{value}</p>
+  </div>
+);
+
+const StatCard = ({ icon: Icon, label, value, color, bg }: any) => (
+  <div className={`${bg} p-6 rounded-[2.5rem] border border-white/5 space-y-3 shadow-xl`}>
+     <div className={`w-11 h-11 rounded-2xl bg-black/20 flex items-center justify-center ${color}`}><Icon size={20}/></div>
+     <div>
+        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
+        <p className={`text-2xl font-black italic ${color}`}>{typeof value === 'number' ? value.toFixed(2) : value}</p>
+     </div>
+  </div>
+);
+
+const ProtocolLoadingScreen = () => (
+  <div className="fixed inset-0 bg-[#020617] flex flex-col items-center justify-center space-y-6">
+    <div className="w-16 h-16 border-4 border-blue-500/10 border-t-blue-500 rounded-full animate-spin shadow-[0_0_20px_rgba(37,99,235,0.3)]"></div>
+    <span className="font-black italic text-2xl tracking-tighter uppercase text-white animate-pulse">MINE<span className="text-blue-500">PRO</span></span>
+  </div>
+);
+
+// --- Main App Component ---
 
 const App: React.FC = () => {
   const navigate = useNavigate();
@@ -60,11 +97,46 @@ const App: React.FC = () => {
         supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false })
       ]);
       let profile = profileRes.data;
+      
+      // If profile doesn't exist, create it and handle referral reward
       if (!profile) {
-        const { data: newProfile, error } = await supabase.from('profiles').insert([{ id: userId, balance: 0, withdrawable_balance: 0, referral_code: Math.random().toString(36).substring(2, 8).toUpperCase(), first_name: 'User', email: userEmail }]).select().single();
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const metadata = currentSession?.user?.user_metadata;
+        const refCode = metadata?.referred_by;
+        let referrerId = null;
+
+        // Find referrer if code exists
+        if (refCode) {
+          const { data: referrer } = await supabase.from('profiles').select('id, balance').eq('referral_code', refCode).maybeSingle();
+          if (referrer) {
+            referrerId = referrer.id;
+            // Reward referrer with 0.10 for successful signup
+            await supabase.from('profiles').update({ balance: Number(referrer.balance) + 0.10 }).eq('id', referrer.id);
+            // Create a transaction record for the referrer
+            await supabase.from('transactions').insert({
+              user_id: referrer.id,
+              type: 'referral',
+              amount: 0.10,
+              status: 'completed',
+              details: `Registration bonus for inviting ${metadata?.first_name || 'User'}`,
+              date: new Date().toISOString()
+            });
+          }
+        }
+
+        const { data: newProfile, error } = await supabase.from('profiles').insert([{ 
+          id: userId, 
+          balance: 0, 
+          withdrawable_balance: 0, 
+          referral_code: Math.random().toString(36).substring(2, 8).toUpperCase(), 
+          first_name: metadata?.first_name || 'User', 
+          email: userEmail,
+          referred_by_id: referrerId
+        }]).select().single();
         if (error) throw error;
         profile = newProfile;
       }
+      
       if (profile) {
         setUserData({
           ...profile,
@@ -80,7 +152,6 @@ const App: React.FC = () => {
         });
         await fetchAdminUUID();
         
-        // Show welcome if logging in for the first time in this session
         if (!sessionStorage.getItem('minepro_welcome_shown')) {
           setShowWelcome(true);
           sessionStorage.setItem('minepro_welcome_shown', 'true');
@@ -231,25 +302,44 @@ const App: React.FC = () => {
 
 const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowSupport, lang }: any) => {
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/10 p-8 rounded-[2.5rem] text-white border border-white/5 shadow-2xl relative overflow-hidden group">
-         <div className="relative z-10 space-y-6">
-            <div className="flex justify-between items-center">
-               <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60 italic">{t('balanceTitle')}</p>
-                  <h2 className="text-4xl font-black italic tracking-tight">{(user.balance || 0).toFixed(2)} <span className="text-xl opacity-50 not-italic uppercase ml-1">USDT</span></h2>
-               </div>
-               <TrendingUp size={28} className="opacity-50" />
-            </div>
-            <div className="flex gap-4 pt-2">
-               <button onClick={onShowRecharge} className="flex-1 bg-white text-blue-700 py-4 rounded-2xl font-black text-[13px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">{t('recharge')}</button>
-               <button onClick={onShowWithdraw} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black text-[13px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all">{t('withdraw')}</button>
-            </div>
-         </div>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-8 rounded-[3rem] border border-blue-500/20 shadow-2xl relative overflow-hidden group">
+        <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:rotate-12 transition-transform duration-500">
+           <Wallet size={120} className="text-blue-500" />
+        </div>
+        <div className="relative z-10 space-y-6">
+           <div className="flex justify-between items-center">
+              <div>
+                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] mb-1">{t('balanceTitle')}</p>
+                 <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-black italic text-white tracking-tighter">{(user.balance || 0).toFixed(2)}</span>
+                    <span className="text-xs font-black text-blue-500 uppercase italic">USDT</span>
+                 </div>
+              </div>
+              <div className="w-14 h-14 bg-blue-600 rounded-[1.8rem] flex items-center justify-center text-white shadow-[0_10px_30px_rgba(37,99,235,0.4)]">
+                 <Coins size={32} />
+              </div>
+           </div>
+
+           <div className="flex gap-4">
+              <button onClick={onShowRecharge} className="flex-1 bg-white text-slate-900 py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:scale-105 transition-transform active:scale-95 shadow-xl">
+                 <ArrowUpRight size={16} />
+                 {t('recharge')}
+              </button>
+              <button onClick={onShowWithdraw} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:scale-105 transition-transform active:scale-95 shadow-xl">
+                 <ArrowUpRight size={16} className="rotate-90" />
+                 {t('withdraw')}
+              </button>
+           </div>
+        </div>
       </div>
 
-      <div className="w-full bg-[#1e143b] p-7 rounded-[2.5rem] border border-white/5 flex flex-col gap-5 relative group overflow-hidden">
-        <div className="flex justify-between items-start">
+      {/* STUCK FUNDS SECTION - AS REQUESTED */}
+      <div className="w-full bg-[#1e143b] p-7 rounded-[2.5rem] border border-white/5 flex flex-col gap-5 relative group overflow-hidden shadow-xl">
+        <div className="absolute top-0 right-0 p-4 opacity-5 rotate-12">
+            <LifeBuoy size={100} />
+        </div>
+        <div className="flex justify-between items-start relative z-10">
            <div className="flex-1 space-y-2">
               <h4 className="text-white font-black text-lg uppercase italic tracking-tight">{t('stuckFunds')}</h4>
               <p className="text-[11px] text-slate-400 font-bold leading-relaxed">{t('stuckFundsDesc')}</p>
@@ -258,77 +348,69 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowS
               <AlertCircle size={32} />
            </div>
         </div>
-        <button onClick={onShowSupport} className="w-fit bg-white text-[#1e143b] px-6 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-wider flex items-center gap-2 shadow-lg active:scale-95 transition-all">
+        <button onClick={onShowSupport} className="w-fit bg-white text-[#1e143b] px-6 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-wider flex items-center gap-2 shadow-lg active:scale-95 transition-all relative z-10">
            {t('requestHelpBtn')}
            <MessageCircle size={14} className="fill-current opacity-30" />
         </button>
       </div>
 
-      <div className="w-full bg-[#064e3b]/30 p-7 rounded-[2.5rem] border border-emerald-500/20 flex flex-col gap-4 relative group">
-        <div className="flex justify-between items-start">
-           <div className="flex-1 space-y-2">
-              <h4 className="text-emerald-400 font-black text-lg uppercase italic tracking-tight">{t('secureSystem')}</h4>
-              <p className="text-[11px] text-slate-400 font-bold leading-relaxed">{t('secureSystemDesc')}</p>
-           </div>
-           <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-[0_0_20px_rgba(16,185,129,0.3)]">
-              <ShieldCheck size={28} />
-           </div>
-        </div>
-      </div>
-
-      <div className="w-full bg-[#0f172a] p-7 rounded-[2.5rem] border border-blue-500/10 flex flex-col gap-5 relative group">
-        <div className="flex justify-between items-start">
-           <div className="flex-1 space-y-2">
-              <h4 className="text-white font-black text-lg uppercase italic tracking-tight">{t('needHelp')}</h4>
-              <p className="text-[11px] text-slate-400 font-bold leading-relaxed">{t('needHelpDesc')}</p>
-           </div>
-           <div className="w-14 h-14 bg-blue-600 rounded-3xl flex items-center justify-center text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]">
-              <Headphones size={32} />
-           </div>
-        </div>
-        <button onClick={onShowSupport} className="w-fit bg-white text-[#0f172a] px-8 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-wider flex items-center gap-2 shadow-lg active:scale-95 transition-all">
-           {t('talkToUsBtn')}
-        </button>
-      </div>
-
-      <div className="space-y-4 pt-2">
-         <div className="flex justify-between items-center px-1">
-            <h4 className="text-[11px] font-black uppercase text-slate-600 tracking-[0.2em] italic">{t('historyTitle')}</h4>
-            <History size={16} className="text-slate-600" />
+      <div className="grid grid-cols-2 gap-4">
+         <div onClick={onShowSupport} className="bg-[#0b1424] p-6 rounded-[2.5rem] border border-white/5 space-y-4 cursor-pointer hover:border-blue-500/30 transition-all group shadow-lg">
+            <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-all">
+               <Headphones size={24} />
+            </div>
+            <div>
+               <h4 className="text-white font-black text-sm uppercase italic">{t('supportChat')}</h4>
+               <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">{t('needHelp')}</p>
+            </div>
          </div>
-         <div className="space-y-3">
+         <div onClick={onShowInfo} className="bg-[#0b1424] p-6 rounded-[2.5rem] border border-white/5 space-y-4 cursor-pointer hover:border-blue-500/30 transition-all group shadow-lg">
+            <div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white transition-all">
+               <Info size={24} />
+            </div>
+            <div>
+               <h4 className="text-white font-black text-sm uppercase italic">{lang === 'ar' ? 'معلومات' : 'Information'}</h4>
+               <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">MINEPRO PROTOCOL</p>
+            </div>
+         </div>
+      </div>
+
+      <div className="bg-[#0b1424] p-8 rounded-[3rem] border border-white/5 space-y-6 shadow-xl">
+         <div className="flex justify-between items-center">
+            <h3 className="text-white font-black text-sm uppercase italic tracking-widest">{t('history')}</h3>
+            <History size={18} className="text-slate-600" />
+         </div>
+         <div className="space-y-4">
             {user.transactions.slice(0, 3).map((tx: any) => (
-               <div key={tx.id} className="bg-[#0b0f1a] p-5 rounded-3xl border border-white/5 flex flex-col gap-2 shadow-lg">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                       <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${tx.amount > 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                          {tx.type === 'deposit' ? <Zap size={20} /> : tx.type === 'withdrawal' ? <ExternalLink size={20} /> : <TrendingUp size={20} />}
-                       </div>
-                       <div>
-                          <p className="text-white font-black text-xs uppercase italic">{String(tx.type)}</p>
-                          <p className="text-[9px] text-slate-600 font-bold uppercase tracking-tighter">{new Date(tx.date).toLocaleDateString()}</p>
-                       </div>
-                    </div>
-                    <div className="text-right">
-                       <p className={`font-black text-lg italic ${tx.amount > 0 ? 'text-emerald-500' : 'text-red-500'}`}>{tx.amount > 0 ? '+' : ''}{Number(tx.amount).toFixed(2)}</p>
-                       <p className={`text-[8px] font-black uppercase tracking-widest mt-0.5 ${tx.status === 'completed' ? 'text-emerald-600' : 'text-orange-500'}`}>{tx.status}</p>
-                    </div>
+               <div key={tx.id} className="flex justify-between items-center p-4 bg-black/20 rounded-2xl border border-white/5">
+                  <div className="flex items-center gap-3">
+                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === 'deposit' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                        {tx.type === 'deposit' ? <ArrowUpRight size={18} /> : <ArrowUpRight size={18} className="rotate-90" />}
+                     </div>
+                     <div>
+                        <p className="text-white font-black text-[11px] uppercase italic">{tx.type}</p>
+                        <p className="text-[8px] text-slate-500 font-bold uppercase">{new Date(tx.date).toLocaleDateString()}</p>
+                     </div>
                   </div>
-                  {tx.details && (
-                    <div className="bg-white/5 p-3 rounded-xl flex items-start gap-2 border border-white/5">
-                       <StickyNote size={12} className="text-blue-500 shrink-0 mt-0.5" />
-                       <p className="text-[10px] text-slate-400 font-bold leading-tight">{tx.details}</p>
-                    </div>
-                  )}
+                  <div className="text-right">
+                     <p className={`text-sm font-black italic ${tx.amount > 0 ? 'text-emerald-500' : 'text-red-500'}`}>{tx.amount > 0 ? '+' : ''}{tx.amount.toFixed(2)}</p>
+                     <p className={`text-[8px] font-black uppercase ${tx.status === 'completed' ? 'text-emerald-500' : 'text-orange-500'}`}>{tx.status}</p>
+                  </div>
                </div>
             ))}
+            {user.transactions.length === 0 && (
+               <div className="py-10 text-center opacity-20">
+                  <Activity size={32} className="mx-auto mb-2" />
+                  <p className="text-[10px] font-black uppercase tracking-widest">No Activity Recorded</p>
+               </div>
+            )}
          </div>
       </div>
     </div>
   );
 };
 
-// --- Admin View ---
+// --- Admin ---
 
 const AdminView = ({ adminId, t, showToast, lang }: any) => {
   const [mainTab, setMainTab] = useState<'deposit' | 'messages' | 'withdraw' | 'members'>('deposit');
@@ -362,7 +444,7 @@ const AdminView = ({ adminId, t, showToast, lang }: any) => {
         const { data: txs } = await txQuery.order('date', { ascending: false });
         if (txs) {
           const uids = txs.map(t => t.user_id);
-          const { data: profs } = await supabase.from('profiles').select('id, first_name, email').in('id', uids);
+          const { data: profs } = await supabase.from('profiles').select('*').in('id', uids);
           setData(txs.map(tx => ({ ...tx, profiles: profs?.find(p => p.id === tx.user_id) })));
         } else setData([]);
       }
@@ -376,8 +458,36 @@ const AdminView = ({ adminId, t, showToast, lang }: any) => {
     try {
       await supabase.from('transactions').update({ status: newStatus }).eq('id', tx.id);
       if (newStatus === 'completed' && tx.type === 'deposit') {
+        // Find user profile to see if they were referred
         const { data: p } = await supabase.from('profiles').select('*').eq('id', tx.user_id).single();
-        await supabase.from('profiles').update({ balance: Number(p.balance) + Number(tx.amount), total_recharge: Number(p.total_recharge) + Number(tx.amount) }).eq('id', tx.user_id);
+        
+        // Update user balance
+        await supabase.from('profiles').update({ 
+          balance: Number(p.balance) + Number(tx.amount), 
+          total_recharge: Number(p.total_recharge) + Number(tx.amount) 
+        }).eq('id', tx.user_id);
+
+        // Handle referral reward for deposit (10%)
+        if (p.referred_by_id) {
+           const referralBonus = Number(tx.amount) * 0.10;
+           const { data: referrer } = await supabase.from('profiles').select('balance').eq('id', p.referred_by_id).maybeSingle();
+           
+           if (referrer) {
+              await supabase.from('profiles').update({ 
+                balance: Number(referrer.balance) + referralBonus 
+              }).eq('id', p.referred_by_id);
+
+              // Record referral transaction for referrer
+              await supabase.from('transactions').insert({
+                user_id: p.referred_by_id,
+                type: 'referral',
+                amount: referralBonus,
+                status: 'completed',
+                details: `10% Commission from deposit of ${p.first_name}`,
+                date: new Date().toISOString()
+              });
+           }
+        }
       }
       showToast("Protocol Confirmed", "success");
       fetchData();
@@ -387,7 +497,7 @@ const AdminView = ({ adminId, t, showToast, lang }: any) => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
        {selectedUserDetails && <UserDetailsModal userId={selectedUserDetails} onClose={() => setSelectedUserDetails(null)} lang={lang} showToast={showToast} />}
-       {selectedChatUserId && <SupportChatModal lang={lang} onClose={() => setSelectedChatUserId(null)} userId={selectedChatUserId} initialAdminId={adminId} showToast={showToast} isAdminReply={true} />}
+       {selectedChatUserId && <SupportChatModal lang={lang} onClose={() => setSelectedChatUserId(null)} user={null} userId={selectedChatUserId} initialAdminId={adminId} showToast={showToast} isAdminReply={true} />}
        
        <div className="bg-[#0b1424] p-3 rounded-[2rem] flex gap-2 shadow-2xl border border-white/5">
          {[
@@ -635,30 +745,11 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
                    })}
                 </div>
              </div>
-
-             <div className="space-y-4 pt-4">
-                <div className="flex items-center justify-end gap-2 text-blue-500">
-                   <h4 className="text-[11px] font-black uppercase italic">سجل العمليات الكامل</h4>
-                   <Clock size={18} />
-                </div>
-                <div className="bg-black/20 p-8 rounded-3xl border border-dashed border-white/5 text-center opacity-30">
-                    <History size={24} className="mx-auto mb-2" />
-                    <p className="text-[9px] font-black uppercase tracking-widest">NO RECORDS FOUND</p>
-                </div>
-             </div>
           </div>
        </div>
     </div>
   );
 };
-
-/* Helper component for displaying user statistics in the details modal */
-const ProfileStatCard = ({ label, value, color }: any) => (
-  <div className="bg-[#020617]/60 p-5 rounded-[1.8rem] border border-white/5 text-center space-y-2">
-     <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">{label}</p>
-     <p className={`text-xl font-black italic tracking-tight ${color}`}>{value}</p>
-  </div>
-);
 
 const MachinesView = ({ user, onBuy, t, lang }: any) => {
   return (
@@ -752,7 +843,7 @@ const TasksView = ({ user, onComplete, t, lang }: any) => {
 
       <div className="space-y-4">
         {user.ownedMachines.length === 0 ? (
-          <div className="bg-[#0b0f1a] p-12 rounded-[3rem] border border-white/5 text-center space-y-4">
+          <div className="bg-[#0b0f1a] p-12 rounded-[3rem] border border-white/5 text-center space-y-4 shadow-xl">
              <div className="w-20 h-20 bg-slate-800/20 rounded-full flex items-center justify-center mx-auto opacity-30">
                 <ZapOff size={40} className="text-slate-500" />
              </div>
@@ -837,7 +928,7 @@ const TasksView = ({ user, onComplete, t, lang }: any) => {
         })}
       </div>
 
-      <div className="bg-blue-600/5 p-6 rounded-[2rem] border border-blue-500/10 flex items-start gap-4">
+      <div className="bg-blue-600/5 p-6 rounded-[2rem] border border-blue-500/10 flex items-start gap-4 shadow-lg">
          <Info size={24} className="text-blue-500 shrink-0 mt-0.5" />
          <p className="text-[10px] text-blue-100/60 font-bold leading-relaxed">
            {lang === 'ar' 
@@ -908,18 +999,44 @@ const WelcomeModal = ({ onClose, lang }: { onClose: () => void, lang: Language }
 };
 
 const TeamView = ({ user, t, lang, showToast }: any) => {
+  const refLink = `https://mining-pro.vercel.app/#/?ref=${user.referral_code}`;
+  
   return (
     <div className="space-y-6 pb-10">
       <div className="bg-gradient-to-br from-purple-600 to-indigo-800 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
-         <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Referral ID</p>
-         <div className="flex items-center justify-between bg-white/10 p-5 rounded-[2rem] border border-white/20 mt-4 backdrop-blur-sm">
+         <div className="absolute top-0 right-0 p-6 opacity-10 rotate-12">
+            <Users size={120} />
+         </div>
+         <p className="text-[10px] font-black uppercase tracking-widest opacity-60 relative z-10">Referral ID</p>
+         <div className="flex items-center justify-between bg-white/10 p-5 rounded-[2rem] border border-white/20 mt-4 backdrop-blur-sm relative z-10">
             <span className="text-2xl font-black italic tracking-widest">{user.referral_code}</span>
-            <button onClick={() => { navigator.clipboard.writeText(user.referral_code); showToast("Copied", "success"); }} className="p-2.5 bg-white text-purple-700 rounded-xl"><Copy size={18}/></button>
+            <button onClick={() => { navigator.clipboard.writeText(user.referral_code); showToast("Copied Code", "success"); }} className="p-2.5 bg-white text-purple-700 rounded-xl active:scale-90 transition-transform"><Copy size={18}/></button>
+         </div>
+         <div className="mt-6 space-y-2 relative z-10">
+            <p className="text-[9px] font-black uppercase tracking-widest opacity-60">Share Link (0.10 USDT per referral)</p>
+            <div className="flex gap-2">
+               <div className="flex-1 bg-black/20 p-4 rounded-2xl border border-white/10 text-[10px] font-mono truncate">{refLink}</div>
+               <button onClick={() => { navigator.clipboard.writeText(refLink); showToast("Link Copied", "success"); }} className="bg-white text-indigo-700 px-4 rounded-2xl font-black text-[10px] uppercase shadow-lg">Copy Link</button>
+            </div>
          </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
          <StatCard icon={Award} label="Commission" value={user.referralEarnings} color="text-purple-500" bg="bg-purple-500/10" />
          <StatCard icon={Users} label="Team Members" value={0} color="text-blue-500" bg="bg-blue-500/10" />
+      </div>
+      
+      <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 space-y-4">
+         <h5 className="text-white font-black text-xs uppercase italic tracking-widest">Referral Rewards Protocol</h5>
+         <div className="space-y-3">
+            <div className="flex items-center gap-3">
+               <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500"><Plus size={16}/></div>
+               <p className="text-[10px] text-slate-400 font-bold">0.10 USDT Registration Bonus</p>
+            </div>
+            <div className="flex items-center gap-3">
+               <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500"><TrendingUp size={16}/></div>
+               <p className="text-[10px] text-slate-400 font-bold">10% from every deposit made by referrals</p>
+            </div>
+         </div>
       </div>
     </div>
   );
@@ -935,12 +1052,12 @@ const ProfileView = ({ user, t, lang }: any) => {
          <h3 className="text-xl font-black italic uppercase tracking-tighter">{user.first_name || 'User'}</h3>
          <p className="text-[10px] text-slate-500 font-bold uppercase mt-1 tracking-widest">{user.email}</p>
       </div>
-      <div className="bg-[#0b0f1a] p-4 rounded-[2.5rem] border border-white/5 space-y-4">
+      <div className="bg-[#0b0f1a] p-4 rounded-[2.5rem] border border-white/5 space-y-4 shadow-xl">
          <ProfileItem label="Deposits" value={`${(user.totalRecharge || 0).toFixed(2)} USDT`} icon={Zap} color="text-emerald-500" />
          <ProfileItem label="Total Withdraw" value={`${(user.totalWithdraw || 0).toFixed(2)} USDT`} icon={ExternalLink} color="text-red-500" />
          <ProfileItem label="Joined" value={new Date(user.created_at).toLocaleDateString()} icon={Calendar} color="text-blue-500" />
       </div>
-      <button onClick={() => supabase.auth.signOut()} className="w-full bg-red-500/10 text-red-500 py-5 rounded-[2rem] font-black text-[11px] uppercase tracking-widest border border-red-500/10 active:scale-95 transition-all">LOGOUT</button>
+      <button onClick={() => supabase.auth.signOut()} className="w-full bg-red-500/10 text-red-500 py-5 rounded-[2rem] font-black text-[11px] uppercase tracking-widest border border-red-500/10 active:scale-95 transition-all shadow-lg">LOGOUT</button>
     </div>
   );
 };
@@ -955,34 +1072,171 @@ const ProfileItem = ({ label, value, icon: Icon, color }: any) => (
   </div>
 );
 
-/* Helper component for navigation items */
-const NavItem = ({ icon: Icon, label, active, onClick }: any) => (
-  <button onClick={onClick} className="flex flex-col items-center gap-1 group">
-    <div className={`p-3 rounded-2xl transition-all ${active ? 'bg-blue-600 text-white shadow-[0_5px_15px_rgba(37,99,235,0.4)] scale-110' : 'text-slate-500 hover:text-blue-400'}`}>
-      <Icon size={22} className={active ? 'fill-current' : ''} />
+const AuthView = ({ lang, t, showToast }: any) => {
+  const [searchParams] = useSearchParams();
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [refCode, setRefCode] = useState(searchParams.get('ref') || '');
+  const [loading, setLoading] = useState(false);
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault(); setLoading(true);
+    try {
+      if (isLogin) {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signUp({ 
+          email, 
+          password,
+          options: {
+            data: {
+              first_name: fullName,
+              referred_by: refCode
+            }
+          }
+        });
+        if (error) throw error;
+        showToast("تم إنشاء الحساب بنجاح", "success");
+      }
+    } catch (e: any) { showToast(e, "error"); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#020617] flex items-center justify-center p-6">
+      <div className="w-full max-w-md space-y-8 animate-in zoom-in duration-500">
+        <div className="text-center space-y-2">
+          <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white mx-auto shadow-[0_0_30px_rgba(37,99,235,0.4)]"><Zap size={40} className="fill-current" /></div>
+          <h1 className="text-4xl font-black italic tracking-tighter text-white pt-4">MINE<span className="text-blue-500">PRO</span></h1>
+          <p className="text-slate-600 text-[10px] uppercase tracking-[0.4em] font-black">Digital Asset Factory</p>
+        </div>
+
+        <div className="bg-[#0b1424] p-8 rounded-[3rem] border border-white/5 shadow-2xl space-y-6">
+          <div className="flex gap-2 p-1 bg-black/40 rounded-2xl border border-white/5">
+             <button onClick={() => setIsLogin(true)} className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${isLogin ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>تسجيل الدخول</button>
+             <button onClick={() => setIsLogin(false)} className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${!isLogin ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>إنشاء حساب</button>
+          </div>
+
+          <form onSubmit={handleAuth} className="space-y-4">
+            {!isLogin && (
+              <div className="space-y-1">
+                 <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest px-2">الاسم الكامل</p>
+                 <input type="text" placeholder="مثال: أحمد محمد" value={fullName} onChange={e => setFullName(e.target.value)} className="w-full bg-white/5 border border-white/10 p-5 rounded-[2rem] text-white outline-none focus:border-blue-500/50 transition-all text-right" required={!isLogin} />
+              </div>
+            )}
+
+            <div className="space-y-1">
+               <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest px-2">البريد الإلكتروني</p>
+               <input type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 p-5 rounded-[2rem] text-white outline-none focus:border-blue-500/50 transition-all required" />
+            </div>
+
+            <div className="space-y-1">
+               <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest px-2">كلمة المرور</p>
+               <input type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 p-5 rounded-[2rem] text-white outline-none focus:border-blue-500/50 transition-all required" />
+            </div>
+
+            {!isLogin && (
+              <div className="space-y-1">
+                 <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest px-2">رمز الإحالة (اختياري)</p>
+                 <input type="text" placeholder="كود الإحالة إن وجد" value={refCode} onChange={e => setRefCode(e.target.value)} className="w-full bg-white/5 border border-white/10 p-5 rounded-[2rem] text-white outline-none focus:border-blue-500/50 transition-all text-center font-black tracking-widest" />
+              </div>
+            )}
+
+            <button type="submit" disabled={loading} className="w-full bg-blue-600 py-5 rounded-[2rem] font-black text-white uppercase tracking-widest active:scale-95 transition-all shadow-xl mt-4">
+              {loading ? <Loader2 className="animate-spin mx-auto" size={24} /> : (isLogin ? 'تسجيل دخول' : 'إنشاء حسابي')}
+            </button>
+          </form>
+        </div>
+        
+        <p className="text-center text-[10px] text-slate-700 font-black uppercase tracking-tighter">MINEPRO PROTOCOL v3.1.2 - SECURE ENCRYPTED ACCESS</p>
+      </div>
     </div>
-    <span className={`text-[8px] font-black uppercase tracking-widest transition-colors ${active ? 'text-blue-500' : 'text-slate-700'}`}>{label}</span>
-  </button>
-);
+  );
+};
 
-/* Statistical card component for metrics */
-const StatCard = ({ icon: Icon, label, value, color, bg }: any) => (
-  <div className={`${bg} p-6 rounded-[2.5rem] border border-white/5 space-y-3 shadow-xl`}>
-     <div className={`w-11 h-11 rounded-2xl bg-black/20 flex items-center justify-center ${color}`}><Icon size={20}/></div>
-     <div>
-        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
-        <p className={`text-2xl font-black italic ${color}`}>{typeof value === 'number' ? value.toFixed(2) : value}</p>
-     </div>
+const InfoModal = ({ onClose }: { onClose: () => void }) => (
+  <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in">
+    <div className="bg-[#0b0f1a] w-full max-w-sm rounded-[3rem] border border-white/10 p-10 space-y-6 relative text-center">
+      <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-white/5 rounded-2xl text-slate-400 hover:text-white"><X size={20}/></button>
+      <div className="w-16 h-16 bg-blue-600/10 text-blue-500 rounded-3xl flex items-center justify-center mx-auto shadow-inner"><Info size={32}/></div>
+      <h3 className="text-white font-black text-xl uppercase italic">About MINEPRO</h3>
+      <p className="text-slate-400 text-sm leading-relaxed">نظام متقدم لتعدين العملات الرقمية يعتمد على بروتوكولات الذكاء الاصطناعي لضمان أفضل عوائد يومية واستقرار مالي عالمي.</p>
+    </div>
   </div>
 );
 
-/* Standardized loading screen for protocol data synchronization */
-const ProtocolLoadingScreen = () => (
-  <div className="fixed inset-0 bg-[#020617] flex flex-col items-center justify-center space-y-6">
-    <div className="w-16 h-16 border-4 border-blue-500/10 border-t-blue-500 rounded-full animate-spin shadow-[0_0_20px_rgba(37,99,235,0.3)]"></div>
-    <span className="font-black italic text-2xl tracking-tighter uppercase text-white animate-pulse">MINE<span className="text-blue-500">PRO</span></span>
-  </div>
-);
+const SupportChatModal = ({ lang, onClose, user, userId, initialAdminId, showToast, isAdminReply }: any) => {
+  const [messages, setMessages] = useState<SupportMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const isSubscribed = user?.ownedMachines?.some((um: any) => um.machine_id !== 0) || false;
+
+  const fetchMessages = useCallback(async () => {
+    const { data } = await supabase.from('support_messages').select('*').or(`sender_id.eq.${userId},receiver_id.eq.${userId}`).order('created_at', { ascending: true });
+    if (data) setMessages(data);
+    setLoading(false);
+    setTimeout(() => scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight), 100);
+  }, [userId]);
+
+  useEffect(() => {
+    fetchMessages();
+    const sub = supabase.channel('msgs').on('postgres_changes', { event: '*', table: 'support_messages' }, () => fetchMessages()).subscribe();
+    return () => { sub.unsubscribe(); };
+  }, [fetchMessages]);
+
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !initialAdminId) return;
+    
+    if (!isAdminReply && !isSubscribed) {
+       const q = newMessage.toLowerCase();
+       const isSubQuery = q.includes('اشتراك') || q.includes('تفعيل') || q.includes('subscribe') || q.includes('activate') || q.includes('deposit') || q.includes('ايداع');
+       if (!isSubQuery) {
+         showToast(lang === 'ar' ? 'يجب الاشتراك أولاً لاستخدام الدعم الفني' : 'You must subscribe first to use support', 'error');
+         return;
+       }
+    }
+
+    try {
+      await supabase.from('support_messages').insert({ sender_id: isAdminReply ? initialAdminId : userId, receiver_id: isAdminReply ? userId : initialAdminId, message: newMessage.trim() });
+      setNewMessage('');
+      fetchMessages();
+    } catch (e: any) { showToast(e, "error"); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-[#020617] flex flex-col animate-in slide-in-from-bottom duration-300">
+      <header className="p-6 border-b border-white/5 flex justify-between items-center bg-[#0b0f1a] shadow-lg">
+        <button onClick={onClose} className="p-3 bg-white/5 rounded-2xl text-slate-400 hover:text-white transition-all"><X size={24}/></button>
+        <h3 className="text-white font-black italic uppercase tracking-widest">{lang === 'ar' ? 'الدعم الفني' : 'SUPPORT'}</h3>
+        <div className="w-12"></div>
+      </header>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
+        {!isSubscribed && !isAdminReply && (
+          <div className="bg-orange-500/10 p-5 rounded-[2rem] border border-orange-500/20 text-orange-200 text-xs font-bold leading-relaxed mb-4 text-center shadow-lg">
+            {lang === 'ar' ? '⚠️ تنبيه: نظام الدعم مخصص للمشتركين فقط. يمكنك حالياً إرسال رسائل تتعلق بمشاكل الاشتراك أو الإيداع فقط.' : '⚠️ Alert: Support system is for subscribers only. You can currently only send messages related to subscription or deposit issues.'}
+          </div>
+        )}
+        {loading ? <Loader2 className="animate-spin mx-auto text-blue-500" /> : messages.map(m => {
+          const isMe = isAdminReply ? m.sender_id === initialAdminId : m.sender_id === userId;
+          return (
+            <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] p-5 rounded-[2rem] text-sm font-bold shadow-xl ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white/5 text-slate-200 rounded-tl-none border border-white/5'}`}>{m.message}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="p-6 bg-[#0b0f1a] border-t border-white/5 flex gap-4 shadow-2xl">
+        <input value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Type message..." className="flex-1 bg-black/40 p-5 rounded-[2rem] outline-none text-white text-sm border border-white/5 focus:border-blue-500/30 transition-all" />
+        <button onClick={sendMessage} className="p-5 bg-blue-600 text-white rounded-2xl shadow-xl active:scale-95 transition-all"><Send size={20}/></button>
+      </div>
+    </div>
+  );
+};
 
 const RechargeModal = ({ onClose, onDeposit, showToast, userId, lang }: any) => {
   const [amount, setAmount] = useState('0.00');
@@ -1019,7 +1273,7 @@ const RechargeModal = ({ onClose, onDeposit, showToast, userId, lang }: any) => 
 
   return (
     <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-       <div className="bg-[#111827] w-[92%] max-w-md rounded-[2.5rem] border border-white/10 p-6 space-y-5 relative overflow-y-auto max-h-[95vh] shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+       <div className="bg-[#111827] w-[92%] max-w-md rounded-[2.5rem] border border-white/10 p-6 space-y-5 relative overflow-y-auto max-h-[95vh] shadow-[0_0_50px_rgba(0,0,0,0.5)] no-scrollbar">
           <button onClick={onClose} className="absolute top-5 right-5 p-2 bg-white/5 rounded-2xl text-slate-400 hover:text-white transition-all"><X size={18}/></button>
           
           <div className="text-center space-y-1">
@@ -1047,7 +1301,7 @@ const RechargeModal = ({ onClose, onDeposit, showToast, userId, lang }: any) => 
                <p className="text-[9px] text-blue-100 font-bold leading-relaxed italic">يجب إرفاق لقطة شاشة واضحة من محفظتك توضح تفاصيل عملية التحويل (مكتملة) لضمان سرعة معالجة الطلب.</p>
             </div>
 
-            <div onClick={() => fileRef.current?.click()} className="w-full h-36 bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer group hover:border-blue-500/50 transition-all overflow-hidden relative">
+            <div onClick={() => fileRef.current?.click()} className="w-full h-36 bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer group hover:border-blue-500/50 transition-all overflow-hidden relative shadow-inner">
                {proof ? <img src={proof} className="w-full h-full object-cover" /> : <>
                  <ImageIcon size={28} className="text-blue-500 mb-2 group-hover:scale-110 transition-transform" />
                  <p className="text-[10px] text-slate-400 font-black uppercase group-hover:text-blue-400">اضغط لاختيار صورة</p>
@@ -1089,7 +1343,7 @@ const WithdrawModal = ({ onClose, onWithdraw, userData, userId, showToast, lang 
   };
   return (
     <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in">
-       <div className="bg-[#111827] w-full max-w-md rounded-[3rem] border border-white/10 p-8 space-y-6 relative shadow-[0_20px_60px_rgba(0,0,0,0.8)]">
+       <div className="bg-[#111827] w-full max-w-md rounded-[3rem] border border-white/10 p-8 space-y-6 relative shadow-[0_20px_60px_rgba(0,0,0,0.8)] no-scrollbar">
           <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-white/5 rounded-2xl text-slate-400 hover:text-white transition-all"><X size={20}/></button>
           
           <h3 className="text-2xl font-black italic text-white uppercase text-center tracking-widest">{lang === 'ar' ? 'سحب الرصيد' : 'WITHDRAW'}</h3>
@@ -1099,7 +1353,7 @@ const WithdrawModal = ({ onClose, onWithdraw, userData, userId, showToast, lang 
              <p className="text-2xl font-black text-white italic tracking-tighter">USDT {userData.withdrawableBalance.toFixed(2)}</p>
           </div>
 
-          <div className="bg-red-500/10 p-4 rounded-2xl border border-red-500/20 flex items-center gap-3">
+          <div className="bg-red-500/10 p-4 rounded-2xl border border-red-500/20 flex items-center gap-3 shadow-lg">
              <div className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0">
                 <AlertCircle size={18} />
              </div>
@@ -1109,16 +1363,16 @@ const WithdrawModal = ({ onClose, onWithdraw, userData, userId, showToast, lang 
           <div className="space-y-4">
              <div className="space-y-2">
                 <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest px-2">{lang === 'ar' ? 'عنوان محفظة (BEP20)' : 'WALLET ADDRESS (BEP20)'}</p>
-                <input value={address} onChange={e => setAddress(e.target.value)} placeholder="1uytretdtfyguh" className="w-full bg-[#020617]/60 border border-white/5 p-5 rounded-2xl text-white outline-none font-mono text-sm placeholder-white/10 focus:border-blue-500/30 transition-all" />
+                <input value={address} onChange={e => setAddress(e.target.value)} placeholder="1uytretdtfyguh" className="w-full bg-[#020617]/60 border border-white/5 p-5 rounded-2xl text-white outline-none font-mono text-sm placeholder-white/10 focus:border-blue-500/30 transition-all shadow-inner" />
              </div>
 
              <div className="space-y-2">
                 <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest px-2">{lang === 'ar' ? 'الكمية' : 'AMOUNT'}</p>
-                <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.50" className="w-full bg-[#020617]/60 border border-red-500/20 p-5 rounded-2xl text-white outline-none font-black italic text-xl placeholder-white/10 focus:border-red-500/50 transition-all" />
+                <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.50" className="w-full bg-[#020617]/60 border border-red-500/20 p-5 rounded-2xl text-white outline-none font-black italic text-xl placeholder-white/10 focus:border-red-500/50 transition-all shadow-inner" />
              </div>
           </div>
 
-          <div className="bg-blue-600/10 p-4 rounded-2xl border border-blue-500/10 flex items-start gap-4">
+          <div className="bg-blue-600/10 p-4 rounded-2xl border border-blue-500/10 flex items-start gap-4 shadow-lg">
              <Shield size={24} className="text-blue-500 shrink-0 mt-0.5" />
              <p className="text-[10px] text-blue-100/60 font-bold leading-relaxed">{lang === 'ar' ? 'عمليات السحب تتم مراجعتها بدقة لضمان أمان حسابك وأموالك. يتم المعالجة عادة في غضون وقت قصير' : 'Withdrawals are meticulously reviewed to ensure account security. Processing usually occurs shortly.'}</p>
           </div>
@@ -1127,129 +1381,6 @@ const WithdrawModal = ({ onClose, onWithdraw, userData, userId, showToast, lang 
              {loading ? <Loader2 className="animate-spin mx-auto" /> : (lang === 'ar' ? 'تأكيد السحب' : 'CONFIRM WITHDRAWAL')}
           </button>
        </div>
-    </div>
-  );
-};
-
-const AuthView = ({ lang, t, showToast }: any) => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true);
-    try {
-      if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-        showToast("Access Granted", "success");
-      }
-    } catch (e: any) { showToast(e, "error"); }
-    finally { setLoading(false); }
-  };
-  return (
-    <div className="min-h-screen bg-[#020617] flex items-center justify-center p-6">
-      <div className="w-full max-w-md space-y-8 animate-in zoom-in duration-500">
-        <div className="text-center space-y-2">
-          <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white mx-auto shadow-[0_0_30px_rgba(37,99,235,0.4)]"><Zap size={40} className="fill-current" /></div>
-          <h1 className="text-4xl font-black italic tracking-tighter text-white pt-4">MINE<span className="text-blue-500">PRO</span></h1>
-          <p className="text-slate-600 text-[10px] uppercase tracking-[0.4em] font-black">Digital Asset Factory</p>
-        </div>
-        <form onSubmit={handleAuth} className="space-y-4">
-          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 p-5 rounded-[2rem] text-white outline-none focus:border-blue-500/50 transition-all" required />
-          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 p-5 rounded-[2rem] text-white outline-none focus:border-blue-500/50 transition-all" required />
-          <button type="submit" disabled={loading} className="w-full bg-blue-600 py-5 rounded-[2rem] font-black text-white uppercase tracking-widest active:scale-95 transition-all shadow-xl">
-            {loading ? <Loader2 className="animate-spin mx-auto" size={24} /> : (isLogin ? 'Login' : 'Register')}
-          </button>
-        </form>
-        <button onClick={() => setIsLogin(!isLogin)} className="w-full text-slate-500 text-xs font-black uppercase tracking-widest">{isLogin ? 'New Node? Join Network' : 'Existing Node? Connect'}</button>
-      </div>
-    </div>
-  );
-};
-
-const InfoModal = ({ onClose }: { onClose: () => void }) => (
-  <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in">
-    <div className="bg-[#0b0f1a] w-full max-w-sm rounded-[3rem] border border-white/10 p-10 space-y-6 relative text-center">
-      <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-white/5 rounded-2xl text-slate-400"><X size={20}/></button>
-      <div className="w-16 h-16 bg-blue-600/10 text-blue-500 rounded-3xl flex items-center justify-center mx-auto"><Info size={32}/></div>
-      <h3 className="text-white font-black text-xl uppercase italic">About MINEPRO</h3>
-      <p className="text-slate-400 text-sm leading-relaxed">نظام متقدم لتعدين العملات الرقمية يعتمد على بروتوكولات الذكاء الاصطناعي لضمان أفضل عوائد يومية واستقرار مالي عالمي.</p>
-    </div>
-  </div>
-);
-
-const SupportChatModal = ({ lang, onClose, user, userId, initialAdminId, showToast, isAdminReply }: any) => {
-  const [messages, setMessages] = useState<SupportMessage[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(true);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const isSubscribed = user?.ownedMachines?.some((um: any) => um.machine_id !== 0) || false;
-
-  const fetchMessages = useCallback(async () => {
-    const { data } = await supabase.from('support_messages').select('*').or(`sender_id.eq.${userId},receiver_id.eq.${userId}`).order('created_at', { ascending: true });
-    if (data) setMessages(data);
-    setLoading(false);
-    setTimeout(() => scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight), 100);
-  }, [userId]);
-
-  useEffect(() => {
-    fetchMessages();
-    const sub = supabase.channel('msgs').on('postgres_changes', { event: '*', table: 'support_messages' }, () => fetchMessages()).subscribe();
-    return () => { sub.unsubscribe(); };
-  }, [fetchMessages]);
-
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !initialAdminId) return;
-    
-    // Only allow support if subscribed or if it's an admin reply or if user is asking about subscription
-    if (!isAdminReply && !isSubscribed) {
-       // Check if message looks like a subscription query
-       const q = newMessage.toLowerCase();
-       const isSubQuery = q.includes('اشتراك') || q.includes('تفعيل') || q.includes('subscribe') || q.includes('activate') || q.includes('deposit') || q.includes('ايداع');
-       if (!isSubQuery) {
-         showToast(lang === 'ar' ? 'يجب الاشتراك أولاً لاستخدام الدعم الفني' : 'You must subscribe first to use support', 'error');
-         return;
-       }
-    }
-
-    try {
-      await supabase.from('support_messages').insert({ sender_id: isAdminReply ? initialAdminId : userId, receiver_id: isAdminReply ? userId : initialAdminId, message: newMessage.trim() });
-      setNewMessage('');
-      fetchMessages();
-    } catch (e: any) { showToast(e, "error"); }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[200] bg-[#020617] flex flex-col animate-in slide-in-from-bottom duration-300">
-      <header className="p-6 border-b border-white/5 flex justify-between items-center bg-[#0b0f1a]">
-        <button onClick={onClose} className="p-3 bg-white/5 rounded-2xl text-slate-400"><X size={24}/></button>
-        <h3 className="text-white font-black italic uppercase tracking-widest">{lang === 'ar' ? 'الدعم الفني' : 'SUPPORT'}</h3>
-        <div className="w-12"></div>
-      </header>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
-        {!isSubscribed && !isAdminReply && (
-          <div className="bg-orange-500/10 p-5 rounded-[2rem] border border-orange-500/20 text-orange-200 text-xs font-bold leading-relaxed mb-4 text-center">
-            {lang === 'ar' ? '⚠️ تنبيه: نظام الدعم مخصص للمشتركين فقط. يمكنك حالياً إرسال رسائل تتعلق بمشاكل الاشتراك أو الإيداع فقط.' : '⚠️ Alert: Support system is for subscribers only. You can currently only send messages related to subscription or deposit issues.'}
-          </div>
-        )}
-        {loading ? <Loader2 className="animate-spin mx-auto text-blue-500" /> : messages.map(m => {
-          const isMe = isAdminReply ? m.sender_id === initialAdminId : m.sender_id === userId;
-          return (
-            <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] p-5 rounded-[2rem] text-sm font-bold ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white/5 text-slate-200 rounded-tl-none'}`}>{m.message}</div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="p-6 bg-[#0b0f1a] border-t border-white/5 flex gap-4">
-        <input value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Type message..." className="flex-1 bg-black/40 p-5 rounded-[2rem] outline-none text-white text-sm border border-white/5" />
-        <button onClick={sendMessage} className="p-5 bg-blue-600 text-white rounded-2xl shadow-xl active:scale-95 transition-all"><Send size={20}/></button>
-      </div>
     </div>
   );
 };
