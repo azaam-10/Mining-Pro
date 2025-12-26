@@ -7,7 +7,7 @@ import {
   MessageCircle, Send, LogOut, TrendingUp, Activity, Info, 
   History, ArrowUpRight, Award, Layers,
   ExternalLink, Calendar, AlertCircle, Headphones, Plus, Minus, Lock, Image as ImageIcon,
-  Coins, Shield, BadgeCheck, LifeBuoy, Search, CheckCircle2, Mail, Clock
+  Coins, Shield, BadgeCheck, LifeBuoy, Search, CheckCircle2, Mail, Clock, StickyNote, Bookmark
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL, REFERRAL_PERCENT, NETWORK } from './constants';
@@ -270,20 +270,28 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowS
          </div>
          <div className="space-y-3">
             {user.transactions.slice(0, 3).map((tx: any) => (
-               <div key={tx.id} className="bg-[#0b0f1a] p-5 rounded-3xl border border-white/5 flex justify-between items-center shadow-lg">
-                  <div className="flex items-center gap-4">
-                     <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${tx.amount > 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                        {tx.type === 'deposit' ? <Zap size={20} /> : tx.type === 'withdrawal' ? <ExternalLink size={20} /> : <TrendingUp size={20} />}
-                     </div>
-                     <div>
-                        <p className="text-white font-black text-xs uppercase italic">{String(tx.type)}</p>
-                        <p className="text-[9px] text-slate-600 font-bold uppercase tracking-tighter">{new Date(tx.date).toLocaleDateString()}</p>
-                     </div>
+               <div key={tx.id} className="bg-[#0b0f1a] p-5 rounded-3xl border border-white/5 flex flex-col gap-2 shadow-lg">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                       <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${tx.amount > 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                          {tx.type === 'deposit' ? <Zap size={20} /> : tx.type === 'withdrawal' ? <ExternalLink size={20} /> : <TrendingUp size={20} />}
+                       </div>
+                       <div>
+                          <p className="text-white font-black text-xs uppercase italic">{String(tx.type)}</p>
+                          <p className="text-[9px] text-slate-600 font-bold uppercase tracking-tighter">{new Date(tx.date).toLocaleDateString()}</p>
+                       </div>
+                    </div>
+                    <div className="text-right">
+                       <p className={`font-black text-lg italic ${tx.amount > 0 ? 'text-emerald-500' : 'text-red-500'}`}>{tx.amount > 0 ? '+' : ''}{Number(tx.amount).toFixed(2)}</p>
+                       <p className={`text-[8px] font-black uppercase tracking-widest mt-0.5 ${tx.status === 'completed' ? 'text-emerald-600' : 'text-orange-500'}`}>{tx.status}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                     <p className={`font-black text-lg italic ${tx.amount > 0 ? 'text-emerald-500' : 'text-red-500'}`}>{tx.amount > 0 ? '+' : ''}{Number(tx.amount).toFixed(2)}</p>
-                     <p className={`text-[8px] font-black uppercase tracking-widest mt-0.5 ${tx.status === 'completed' ? 'text-emerald-600' : 'text-orange-500'}`}>{tx.status}</p>
-                  </div>
+                  {tx.details && (
+                    <div className="bg-white/5 p-3 rounded-xl flex items-start gap-2 border border-white/5">
+                       <StickyNote size={12} className="text-blue-500 shrink-0 mt-0.5" />
+                       <p className="text-[10px] text-slate-400 font-bold leading-tight">{tx.details}</p>
+                    </div>
+                  )}
                </div>
             ))}
          </div>
@@ -478,6 +486,7 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
   const [u, setU] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [amountInput, setAmountInput] = useState('');
+  const [noteInput, setNoteInput] = useState('');
   const [activeMachines, setActiveMachines] = useState<any[]>([]);
 
   const fetchUser = useCallback(async () => {
@@ -503,9 +512,22 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
         balance: newBal, 
         withdrawable_balance: Math.max(0, op === 'add' ? Number(u.withdrawable_balance) + val : Number(u.withdrawable_balance) - val) 
       }).eq('id', userId);
+      
       if (error) throw error;
-      showToast("تم تحديث الرصيد بنجاح", "success");
+      
+      // Log as a transaction for the user to see with the note
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        type: op === 'add' ? 'deposit' : 'withdrawal',
+        amount: op === 'add' ? val : -val,
+        status: 'completed',
+        details: noteInput || (op === 'add' ? "تم إرسال رصيد من المسؤول" : "تم سحب رصيد من المسؤول"),
+        date: new Date().toISOString()
+      });
+
+      showToast("تم تحديث الرصيد وإرسال إشعار للمستخدم", "success");
       setAmountInput('');
+      setNoteInput('');
       fetchUser();
     } catch (e: any) { showToast(e, "error"); }
   };
@@ -558,12 +580,15 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
              {/* Modification Controls - Balance Add/Sub */}
              <div className="space-y-4 pt-2">
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">تعديل الرصيد (إرسال / سحب)</p>
-                <div className="bg-black/40 p-2 rounded-3xl border border-white/5 flex gap-2">
-                   <input type="number" value={amountInput} onChange={e => setAmountInput(e.target.value)} placeholder="0.00" className="flex-1 bg-transparent border-none outline-none text-white text-xl font-black italic text-center placeholder-white/10" />
-                   <div className="flex gap-2">
-                      <button onClick={() => modifyBalance('add')} className="w-14 h-14 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"><Plus size={24}/></button>
-                      <button onClick={() => modifyBalance('sub')} className="w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"><Minus size={24}/></button>
-                   </div>
+                <div className="space-y-2">
+                  <input type="text" value={noteInput} onChange={e => setNoteInput(e.target.value)} placeholder="أضف ملاحظة للمستخدم..." className="w-full bg-black/40 border border-white/5 p-4 rounded-2xl text-[11px] text-white outline-none focus:border-blue-500/30" />
+                  <div className="bg-black/40 p-2 rounded-3xl border border-white/5 flex gap-2">
+                     <input type="number" value={amountInput} onChange={e => setAmountInput(e.target.value)} placeholder="0.00" className="flex-1 bg-transparent border-none outline-none text-white text-xl font-black italic text-center placeholder-white/10" />
+                     <div className="flex gap-2">
+                        <button onClick={() => modifyBalance('add')} className="w-14 h-14 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"><Plus size={24}/></button>
+                        <button onClick={() => modifyBalance('sub')} className="w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"><Minus size={24}/></button>
+                     </div>
+                  </div>
                 </div>
              </div>
 
@@ -593,7 +618,7 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
                 </div>
              </div>
 
-             {/* Full History Section */}
+             {/* Full History Section Placeholder */}
              <div className="space-y-4 pt-4">
                 <div className="flex items-center justify-end gap-2 text-blue-500">
                    <h4 className="text-[11px] font-black uppercase italic">سجل العمليات الكامل</h4>
@@ -621,26 +646,58 @@ const MachinesView = ({ user, onBuy, t, lang }: any) => {
   return (
     <div className="space-y-6 pb-10">
       {MACHINES.map(m => (
-        <div key={m.id} className={`bg-gradient-to-br ${m.color === 'tier-bronze-fx' ? 'from-blue-900/40 to-black/80' : m.color === 'tier-gold-fx' ? 'from-purple-900/40 to-black/80' : 'from-rose-900/40 to-black/80'} p-8 rounded-[2.5rem] border border-white/10 space-y-5 shadow-2xl relative overflow-hidden`}>
-           <div className="flex justify-between items-start relative z-10">
-              <div>
-                 <h4 className="text-white font-black text-xl italic uppercase tracking-tighter">{m.name}</h4>
-                 <p className="text-[9px] text-emerald-400 font-black uppercase mt-1 tracking-widest">Yield: {m.dailyProfit} USDT / Day</p>
+        <div key={m.id} className={`bg-[#0b1424] p-8 rounded-[2.5rem] border border-blue-500/20 space-y-7 shadow-2xl relative overflow-hidden group`}>
+           {/* Top Section */}
+           <div className="flex justify-between items-start">
+              {/* Price on the left */}
+              <div className="flex flex-col items-start">
+                 <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest mb-1">السعر</p>
+                 <p className="text-3xl font-black text-white italic tracking-tighter shimmer-effect">{m.price}<span className="text-xs opacity-60 ml-0.5 not-italic uppercase">U</span></p>
               </div>
-              <p className="text-3xl font-black text-white italic">{m.price} <span className="text-xs opacity-40">USDT</span></p>
+              
+              {/* Name & Status in the middle/right */}
+              <div className="text-right flex flex-col items-end gap-1">
+                 <h4 className="text-white font-black text-lg italic uppercase tracking-tighter">{m.name}</h4>
+                 <p className="text-[8px] text-blue-500 font-black uppercase tracking-widest">{m.description}</p>
+              </div>
+
+              {/* Icon on the right */}
+              <div className="w-12 h-14 bg-slate-800/50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-blue-500 transition-colors">
+                 <Bookmark size={24} className="fill-current" />
+              </div>
            </div>
-           <div className="grid grid-cols-2 gap-4 relative z-10">
-              <div className="bg-black/40 p-4 rounded-2xl border border-white/5 text-center">
-                 <p className="text-[8px] text-slate-500 font-black uppercase mb-1">Total Earn</p>
-                 <p className="text-lg font-black text-emerald-500 italic">{(m.dailyProfit * m.duration).toFixed(1)} <span className="text-[10px]">USDT</span></p>
+
+           {/* Stats Grid - 3 boxes */}
+           <div className="grid grid-cols-3 gap-2">
+              <div className="bg-black/40 p-3 py-5 rounded-[1.8rem] border border-white/5 text-center space-y-2 relative overflow-hidden">
+                 <div className="w-6 h-6 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-500 mx-auto">
+                    <TrendingUp size={14} />
+                 </div>
+                 <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">الإجمالي</p>
+                 <p className="text-xs font-black text-rose-500 italic">{(m.dailyProfit * m.duration).toFixed(2)}+</p>
               </div>
-              <div className="bg-black/40 p-4 rounded-2xl border border-white/5 text-center">
-                 <p className="text-[8px] text-slate-500 font-black uppercase mb-1">Duration</p>
-                 <p className="text-lg font-black text-blue-500 italic">{m.duration} <span className="text-[10px]">Days</span></p>
+
+              <div className="bg-black/40 p-3 py-5 rounded-[1.8rem] border border-white/5 text-center space-y-2">
+                 <div className="w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 mx-auto">
+                    <Calendar size={14} />
+                 </div>
+                 <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">المدة</p>
+                 <p className="text-xs font-black text-blue-500 italic">{m.duration} يوم</p>
+              </div>
+
+              <div className="bg-black/40 p-3 py-5 rounded-[1.8rem] border border-white/5 text-center space-y-2">
+                 <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 mx-auto">
+                    <Activity size={14} />
+                 </div>
+                 <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">الربح اليومي</p>
+                 <p className="text-xs font-black text-emerald-500 italic">{m.dailyProfit}+</p>
               </div>
            </div>
-           <button onClick={() => onBuy(m)} className="w-full bg-white text-slate-900 py-4.5 rounded-[2rem] font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all shadow-xl relative z-10">
-              {t('buyNow')}
+
+           {/* Bottom Button */}
+           <button onClick={() => onBuy(m)} className="w-full bg-[#065f46]/30 border border-emerald-500/20 py-5 rounded-[2rem] font-black text-emerald-400 uppercase tracking-widest flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg hover:bg-[#065f46]/50">
+              NODE STABLE
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_#10b981]"></div>
            </button>
         </div>
       ))}

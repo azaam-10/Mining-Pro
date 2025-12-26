@@ -17,24 +17,27 @@ const generateMachines = (): Machine[] => {
     price: 0,
     dailyProfit: 0.5,
     duration: 15,
-    description: "ماكينة تجريبية مجانية لبدء رحلة التعدين",
+    description: "TIER STATUS: OPTIMIZED",
     color: "tier-bronze-fx"
   });
 
-  const prices: number[] = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000, 2000, 3000, 4000, 5000, 10000];
+  const prices: number[] = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000, 2000, 3000, 4000, 5000, 10000, 900000, 1000000];
 
   prices.forEach((price, index) => {
-    const dailyProfit = price === 10 ? 1.2 : Number((price * 0.12).toFixed(2));
+    const dailyProfit = price === 10 ? 1.02 : Number((price * 0.102).toFixed(2));
     const duration = 20; 
 
     let name = "";
     let color = "";
     if (price <= 100) {
-      name = `BRONZE CORE v${index + 1}`;
+      name = `BRONZE CORE V${Math.floor(price/10)}`;
       color = "tier-bronze-fx";
     } else if (price <= 1000) {
-      name = `SILVER TITAN x${index}`;
+      name = `SILVER TITAN X${Math.floor(price/12.5)}`;
       color = "tier-gold-fx";
+    } else if (price >= 900000) {
+      name = "DIAMOND SUPREME";
+      color = "tier-diamond-fx";
     } else {
       name = `GOLDEN QUANTUM`;
       color = "tier-platinum-fx";
@@ -46,7 +49,7 @@ const generateMachines = (): Machine[] => {
       price: price,
       dailyProfit: dailyProfit,
       duration: duration,
-      description: "تحويل الأصول الرقمية إلى سيولة مشروعة عبر شبكتنا الموزعة",
+      description: "TIER STATUS: OPTIMIZED",
       color: color 
     });
   });
