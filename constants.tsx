@@ -10,7 +10,7 @@ export const REFERRAL_PERCENT = 0.10;
 const generateMachines = (): Machine[] => {
   const machines: Machine[] = [];
   
-  // Add Free Machine first
+  // Add Free Machine
   machines.push({
     id: 0,
     name: "FREE STARTER NODE",
@@ -23,26 +23,18 @@ const generateMachines = (): Machine[] => {
 
   const prices: number[] = [];
 
-  // Steps requested by user:
-  // 10-100 (diff 10)
+  // Sequence: 10, 20, 30... 100, 125, 150...
   for (let i = 10; i <= 100; i += 10) prices.push(i);
-  // 100-200 (diff 25) - start from 125 to avoid duplicate 100
   for (let i = 125; i <= 200; i += 25) prices.push(i);
-  // 200-500 (diff 50) - start from 250
   for (let i = 250; i <= 500; i += 50) prices.push(i);
-  // 500-1000 (diff 100) - start from 600
   for (let i = 600; i <= 1000; i += 100) prices.push(i);
-  // 1000-10000 (diff 1000) - start from 2000
   for (let i = 2000; i <= 10000; i += 1000) prices.push(i);
-  // 10000-100000 (diff 10000) - start from 20000
   for (let i = 20000; i <= 100000; i += 10000) prices.push(i);
-  // 100000-1000000 (diff 100000) - start from 200000
   for (let i = 200000; i <= 1000000; i += 100000) prices.push(i);
 
   prices.forEach((price, index) => {
-    // Attractive ROI
-    const dailyRate = 0.09 + (Math.log10(price) * 0.012); 
-    const dailyProfit = Number((price * dailyRate).toFixed(2));
+    // Machine ROI logic
+    const dailyProfit = price === 10 ? 1.2 : Number((price * 0.12).toFixed(2));
     const duration = 20; 
 
     let name = "";
@@ -58,9 +50,6 @@ const generateMachines = (): Machine[] => {
     } else if (price <= 10000) {
       name = `GOLDEN QUANTUM`;
       color = "from-purple-500/20 to-purple-600/40";
-    } else if (price <= 10000) {
-      name = `PLATINUM NEBULA`;
-      color = "from-orange-500/20 to-orange-600/40";
     } else {
       name = `DIAMOND SUPREME`;
       color = "from-rose-500/20 to-rose-600/40";
@@ -97,10 +86,10 @@ export const TRANSLATIONS: Translations = {
   owned: { en: "Running", ar: "نشط" },
   completeTask: { en: "Harvest", ar: "استلام" },
   supportChat: { en: "Support", ar: "الدعم الفني" },
-  typeMessage: { en: "Message...", ar: "اكتب رسالتك..." },
-  confirmDeposit: { en: "Confirm", ar: "تأكيد" },
-  clickToUpload: { en: "Add Image", ar: "رفع الإثبات" },
-  minWithdrawalError: { en: "Min 8 USDT", ar: "أقل سحب 8 عملات" },
-  verificationPending: { en: "Pending Review", ar: "قيد المراجعة..." },
-  transactionCompleted: { en: "Success", ar: "تم بنجاح" }
+  stuckFunds: { en: "Stuck Funds?", ar: "هل لديك أموال عالقة؟" },
+  secureSystem: { en: "Secure System", ar: "نظام آمن ومستقر" },
+  needHelp: { en: "Need Help?", ar: "هل تحتاج مساعدة؟" },
+  stuckFundsDesc: { en: "Click here to solve deposit or withdrawal issues", ar: "اضغط هنا لحل مشاكل الإيداع أو السحب فوراً" },
+  secureSystemDesc: { en: "Your data is encrypted with military-grade protocols", ar: "بياناتك مشفرة بالكامل بأعلى معايير الأمان العالمية" },
+  needHelpDesc: { en: "Talk to our team 24/7 for any inquiries", ar: "تواصل مع فريقنا على مدار الساعة لأي استفسار" }
 };
