@@ -70,6 +70,7 @@ const App: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [session, setSession] = useState<any>(null);
   const [userData, setUserData] = useState<UserState | null>(null);
+  const [teamCount, setTeamCount] = useState(0);
   const [adminUUID, setAdminUUID] = useState<string | null>(null);
   const [celebration, setCelebration] = useState<{ amount: number } | null>(null);
 
@@ -91,14 +92,17 @@ const App: React.FC = () => {
     if (!userId) return;
     if (isManual) setSyncing(true);
     try {
-      const [profileRes, machinesRes, txsRes] = await Promise.all([
+      const [profileRes, machinesRes, txsRes, teamRes] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
         supabase.from('user_machines').select('*').eq('user_id', userId),
-        supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false })
+        supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false }),
+        supabase.from('profiles').select('id', { count: 'exact' }).eq('referred_by_id', userId)
       ]);
-      let profile = profileRes.data;
       
-      // If profile doesn't exist, create it and handle referral reward
+      let profile = profileRes.data;
+      setTeamCount(teamRes.count || 0);
+
+      // If profile doesn't exist, create it and handle referral reward (0.10 USDT)
       if (!profile) {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         const metadata = currentSession?.user?.user_metadata;
@@ -110,8 +114,12 @@ const App: React.FC = () => {
           const { data: referrer } = await supabase.from('profiles').select('id, balance').eq('referral_code', refCode).maybeSingle();
           if (referrer) {
             referrerId = referrer.id;
-            // Reward referrer with 0.10 for successful signup
-            await supabase.from('profiles').update({ balance: Number(referrer.balance) + 0.10 }).eq('id', referrer.id);
+            // Reward referrer with 0.10 for successful signup (Add to balance/deposit credit)
+            await supabase.from('profiles').update({ 
+              balance: Number(referrer.balance || 0) + 0.10,
+              referral_earnings: Number(referrer.referral_earnings || 0) + 0.10
+            }).eq('id', referrer.id);
+            
             // Create a transaction record for the referrer
             await supabase.from('transactions').insert({
               user_id: referrer.id,
@@ -133,6 +141,7 @@ const App: React.FC = () => {
           email: userEmail,
           referred_by_id: referrerId
         }]).select().single();
+        
         if (error) throw error;
         profile = newProfile;
       }
@@ -274,7 +283,7 @@ const App: React.FC = () => {
           <Route path="/" element={<HomeView user={userData} t={t} onShowInfo={() => setShowInfo(true)} onShowRecharge={() => setShowRecharge(true)} onShowWithdraw={() => setShowWithdraw(true)} onShowSupport={() => setShowSupport(true)} lang={lang} />} />
           <Route path="/machines" element={<MachinesView user={userData} onBuy={buyMachine} t={t} lang={lang} />} />
           <Route path="/tasks" element={<TasksView user={userData} onComplete={completeTask} t={t} lang={lang} />} />
-          <Route path="/team" element={<TeamView user={userData} t={t} lang={lang} showToast={showToast} />} />
+          <Route path="/team" element={<TeamView user={userData} t={t} lang={lang} showToast={showToast} teamCount={teamCount} />} />
           <Route path="/profile" element={<ProfileView user={userData} t={t} lang={lang} />} />
           <Route path="/admin" element={userData.email === ADMIN_EMAIL ? <AdminView adminId={session.user.id} t={t} showToast={showToast} lang={lang} /> : <Navigate to="/" />} />
           <Route path="*" element={<Navigate to="/" />} />
@@ -334,7 +343,7 @@ const HomeView = ({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowS
         </div>
       </div>
 
-      {/* STUCK FUNDS SECTION - AS REQUESTED */}
+      {/* STUCK FUNDS SECTION - RE-INSTATED AS REQUESTED */}
       <div className="w-full bg-[#1e143b] p-7 rounded-[2.5rem] border border-white/5 flex flex-col gap-5 relative group overflow-hidden shadow-xl">
         <div className="absolute top-0 right-0 p-4 opacity-5 rotate-12">
             <LifeBuoy size={100} />
@@ -467,23 +476,25 @@ const AdminView = ({ adminId, t, showToast, lang }: any) => {
           total_recharge: Number(p.total_recharge) + Number(tx.amount) 
         }).eq('id', tx.user_id);
 
-        // Handle referral reward for deposit (10%)
+        // --- REFERRAL COMMISSION (10%) ---
         if (p.referred_by_id) {
-           const referralBonus = Number(tx.amount) * 0.10;
-           const { data: referrer } = await supabase.from('profiles').select('balance').eq('id', p.referred_by_id).maybeSingle();
+           const bonusAmount = Number(tx.amount) * 0.10;
+           const { data: referrer } = await supabase.from('profiles').select('balance, referral_earnings').eq('id', p.referred_by_id).maybeSingle();
            
            if (referrer) {
+              // Add to referrer's balance (deposit credit)
               await supabase.from('profiles').update({ 
-                balance: Number(referrer.balance) + referralBonus 
+                balance: Number(referrer.balance || 0) + bonusAmount,
+                referral_earnings: Number(referrer.referral_earnings || 0) + bonusAmount
               }).eq('id', p.referred_by_id);
 
               // Record referral transaction for referrer
               await supabase.from('transactions').insert({
                 user_id: p.referred_by_id,
                 type: 'referral',
-                amount: referralBonus,
+                amount: bonusAmount,
                 status: 'completed',
-                details: `10% Commission from deposit of ${p.first_name}`,
+                details: `10% Commission from deposit of ${p.first_name || 'Referral'}`,
                 date: new Date().toISOString()
               });
            }
@@ -718,31 +729,6 @@ const UserDetailsModal = ({ userId, onClose, lang, showToast }: any) => {
                         <button onClick={() => modifyBalance('sub')} className="w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"><Minus size={24}/></button>
                      </div>
                   </div>
-                </div>
-             </div>
-
-             <div className="space-y-4">
-                <div className="flex items-center justify-end gap-2 text-blue-500">
-                   <h4 className="text-[11px] font-black uppercase italic">الماكينات النشطة</h4>
-                   <Cpu size={18} />
-                </div>
-                <div className="space-y-3">
-                   {activeMachines.length === 0 ? (
-                      <div className="p-10 bg-black/20 rounded-3xl border border-dashed border-white/5 text-center">
-                         <p className="text-[9px] text-slate-700 font-black uppercase tracking-[0.2em]">NO ACTIVE HARDWARE</p>
-                      </div>
-                   ) : activeMachines.map(am => {
-                      const m = MACHINES.find(mach => mach.id === am.machine_id);
-                      return (
-                         <div key={am.id} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
-                            <div>
-                               <p className="text-white font-black text-[11px] uppercase italic">{m?.name || 'NODE'}</p>
-                               <p className="text-[8px] text-slate-500 font-bold uppercase mt-0.5">{am.remaining_days} DAYS LEFT</p>
-                            </div>
-                            <Cpu size={16} className="text-blue-500" />
-                         </div>
-                      );
-                   })}
                 </div>
              </div>
           </div>
@@ -998,7 +984,7 @@ const WelcomeModal = ({ onClose, lang }: { onClose: () => void, lang: Language }
   );
 };
 
-const TeamView = ({ user, t, lang, showToast }: any) => {
+const TeamView = ({ user, t, lang, showToast, teamCount }: any) => {
   const refLink = `https://mining-pro.vercel.app/#/?ref=${user.referral_code}`;
   
   return (
@@ -1013,7 +999,7 @@ const TeamView = ({ user, t, lang, showToast }: any) => {
             <button onClick={() => { navigator.clipboard.writeText(user.referral_code); showToast("Copied Code", "success"); }} className="p-2.5 bg-white text-purple-700 rounded-xl active:scale-90 transition-transform"><Copy size={18}/></button>
          </div>
          <div className="mt-6 space-y-2 relative z-10">
-            <p className="text-[9px] font-black uppercase tracking-widest opacity-60">Share Link (0.10 USDT per referral)</p>
+            <p className="text-[9px] font-black uppercase tracking-widest opacity-60">Share Link (0.10 USDT bonus per signup)</p>
             <div className="flex gap-2">
                <div className="flex-1 bg-black/20 p-4 rounded-2xl border border-white/10 text-[10px] font-mono truncate">{refLink}</div>
                <button onClick={() => { navigator.clipboard.writeText(refLink); showToast("Link Copied", "success"); }} className="bg-white text-indigo-700 px-4 rounded-2xl font-black text-[10px] uppercase shadow-lg">Copy Link</button>
@@ -1021,20 +1007,20 @@ const TeamView = ({ user, t, lang, showToast }: any) => {
          </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
-         <StatCard icon={Award} label="Commission" value={user.referralEarnings} color="text-purple-500" bg="bg-purple-500/10" />
-         <StatCard icon={Users} label="Team Members" value={0} color="text-blue-500" bg="bg-blue-500/10" />
+         <StatCard icon={Award} label="Referral Rewards" value={user.referralEarnings} color="text-purple-500" bg="bg-purple-500/10" />
+         <StatCard icon={Users} label="Total Members" value={teamCount} color="text-blue-500" bg="bg-blue-500/10" />
       </div>
       
-      <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 space-y-4">
-         <h5 className="text-white font-black text-xs uppercase italic tracking-widest">Referral Rewards Protocol</h5>
+      <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 space-y-4 shadow-xl">
+         <h5 className="text-white font-black text-xs uppercase italic tracking-widest">Rewards Protocol (v4.0)</h5>
          <div className="space-y-3">
             <div className="flex items-center gap-3">
                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500"><Plus size={16}/></div>
-               <p className="text-[10px] text-slate-400 font-bold">0.10 USDT Registration Bonus</p>
+               <p className="text-[10px] text-slate-400 font-bold">0.10 USDT Per Valid Registration</p>
             </div>
             <div className="flex items-center gap-3">
                <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500"><TrendingUp size={16}/></div>
-               <p className="text-[10px] text-slate-400 font-bold">10% from every deposit made by referrals</p>
+               <p className="text-[10px] text-slate-400 font-bold">10% Commission on all deposits</p>
             </div>
          </div>
       </div>
@@ -1130,12 +1116,12 @@ const AuthView = ({ lang, t, showToast }: any) => {
 
             <div className="space-y-1">
                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest px-2">البريد الإلكتروني</p>
-               <input type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 p-5 rounded-[2rem] text-white outline-none focus:border-blue-500/50 transition-all required" />
+               <input type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 p-5 rounded-[2rem] text-white outline-none focus:border-blue-500/50 transition-all" required />
             </div>
 
             <div className="space-y-1">
                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest px-2">كلمة المرور</p>
-               <input type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 p-5 rounded-[2rem] text-white outline-none focus:border-blue-500/50 transition-all required" />
+               <input type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 p-5 rounded-[2rem] text-white outline-none focus:border-blue-500/50 transition-all" required />
             </div>
 
             {!isLogin && (
@@ -1159,7 +1145,7 @@ const AuthView = ({ lang, t, showToast }: any) => {
 
 const InfoModal = ({ onClose }: { onClose: () => void }) => (
   <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in">
-    <div className="bg-[#0b0f1a] w-full max-w-sm rounded-[3rem] border border-white/10 p-10 space-y-6 relative text-center">
+    <div className="bg-[#0b0f1a] w-full max-w-sm rounded-[3rem] border border-white/10 p-10 space-y-6 relative text-center shadow-2xl">
       <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-white/5 rounded-2xl text-slate-400 hover:text-white"><X size={20}/></button>
       <div className="w-16 h-16 bg-blue-600/10 text-blue-500 rounded-3xl flex items-center justify-center mx-auto shadow-inner"><Info size={32}/></div>
       <h3 className="text-white font-black text-xl uppercase italic">About MINEPRO</h3>
@@ -1230,7 +1216,7 @@ const SupportChatModal = ({ lang, onClose, user, userId, initialAdminId, showToa
           );
         })}
       </div>
-      <div className="p-6 bg-[#0b0f1a] border-t border-white/5 flex gap-4 shadow-2xl">
+      <div className="p-6 bg-[#0b1424] border-t border-white/5 flex gap-4 shadow-2xl">
         <input value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Type message..." className="flex-1 bg-black/40 p-5 rounded-[2rem] outline-none text-white text-sm border border-white/5 focus:border-blue-500/30 transition-all" />
         <button onClick={sendMessage} className="p-5 bg-blue-600 text-white rounded-2xl shadow-xl active:scale-95 transition-all"><Send size={20}/></button>
       </div>
@@ -1296,7 +1282,7 @@ const RechargeModal = ({ onClose, onDeposit, showToast, userId, lang }: any) => 
                <p className="text-[9px] font-black uppercase tracking-widest">إرفاق لقطة شاشة للإثبات</p>
             </div>
             
-            <div className="bg-blue-600/10 p-4 rounded-2xl border border-blue-500/20 flex items-start gap-3 text-right">
+            <div className="bg-blue-600/10 p-4 rounded-2xl border border-blue-500/20 flex items-start gap-3 text-right shadow-inner">
                <Info size={16} className="text-blue-500 shrink-0 mt-0.5" />
                <p className="text-[9px] text-blue-100 font-bold leading-relaxed italic">يجب إرفاق لقطة شاشة واضحة من محفظتك توضح تفاصيل عملية التحويل (مكتملة) لضمان سرعة معالجة الطلب.</p>
             </div>
