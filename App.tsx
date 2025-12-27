@@ -37,7 +37,7 @@ const ProtocolLoadingScreen = () => (
   </div>
 );
 
-// --- Welcome Modal Component (Updated with specific User Text) ---
+// --- Welcome Modal Component ---
 function WelcomeModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[1000] bg-black/95 flex items-center justify-center p-4 backdrop-blur-2xl animate-in fade-in duration-500">
@@ -140,7 +140,7 @@ function PurchaseSuccessOverlay({ machineName, onClose }: { machineName: string,
   );
 }
 
-// --- Enhanced Guided Tour Component (Deep Explanations) ---
+// --- Enhanced Guided Tour Component ---
 function GuidedTour({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(0);
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0, height: 0 });
@@ -158,13 +158,10 @@ function GuidedTour({ onComplete }: { onComplete: () => void }) {
 
   const updateCoords = useCallback(() => {
     const currentStep = steps[step];
-    
-    // Auto navigation if step is on a different page
     if (location.pathname !== currentStep.page) {
       navigate(currentStep.page);
       return;
     }
-
     const el = document.getElementById(currentStep.target);
     if (el) {
       const rect = el.getBoundingClientRect();
@@ -174,7 +171,7 @@ function GuidedTour({ onComplete }: { onComplete: () => void }) {
 
   useEffect(() => {
     updateCoords();
-    const timer = setTimeout(updateCoords, 300); // Small delay to allow page render
+    const timer = setTimeout(updateCoords, 300);
     window.addEventListener('resize', updateCoords);
     return () => {
       window.removeEventListener('resize', updateCoords);
@@ -192,7 +189,6 @@ function GuidedTour({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div className="fixed inset-0 z-[3000]">
-      {/* Dim Overlay with Spotlight Hole */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none">
         <defs>
           <mask id="spotlight-mask">
@@ -210,8 +206,6 @@ function GuidedTour({ onComplete }: { onComplete: () => void }) {
         </defs>
         <rect width="100%" height="100%" fill="rgba(0,0,0,0.85)" mask="url(#spotlight-mask)" />
       </svg>
-
-      {/* Elegant Pointer Bubble */}
       <div 
         style={{ 
           top: isBottom ? coords.top + coords.height + 25 : 'auto', 
@@ -222,9 +216,7 @@ function GuidedTour({ onComplete }: { onComplete: () => void }) {
         className="absolute w-[90%] max-w-sm transition-all duration-500 pointer-events-auto"
       >
         <div className={`relative bg-blue-600 p-7 rounded-[2.5rem] shadow-[0_25px_70px_rgba(37,99,235,0.6)] border-2 border-white/20 animate-in slide-in-from-${isBottom ? 'top' : 'bottom'}-6`}>
-          {/* Arrow */}
           <div className={`absolute left-1/2 -translate-x-1/2 w-6 h-6 bg-blue-600 rotate-45 border-white/20 ${isBottom ? '-top-3 border-l-2 border-t-2' : '-bottom-3 border-r-2 border-b-2'}`}></div>
-          
           <div className="space-y-4 text-center">
             <div className="flex justify-between items-center opacity-50">
                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Step {step + 1}/{steps.length}</span>
@@ -244,8 +236,148 @@ function GuidedTour({ onComplete }: { onComplete: () => void }) {
           </div>
         </div>
       </div>
-
       <div className="absolute inset-0 pointer-events-auto" onClick={next}></div>
+    </div>
+  );
+}
+
+// --- User Details Modal (Admin Expanded) ---
+function UserDetailsModal({ userId, onClose, showToast }: any) {
+  const [details, setDetails] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [adminAmount, setAdminAmount] = useState('');
+  const [adminNote, setAdminNote] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const fetchUser = useCallback(async () => {
+    try {
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      const { data: machines } = await supabase.from('user_machines').select('*').eq('user_id', userId);
+      if (profile) {
+        setDetails({ ...profile, machines: machines || [] });
+      }
+    } catch (err: any) {
+      showToast(err.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, showToast]);
+
+  useEffect(() => {
+    fetchUser();
+  }, [fetchUser]);
+
+  const handleUpdateBalance = async (action: 'add' | 'subtract') => {
+    if (!adminAmount || Number(adminAmount) <= 0) {
+      showToast("يرجى إدخال مبلغ صحيح", "error");
+      return;
+    }
+    setIsUpdating(true);
+    try {
+      const amount = Number(adminAmount);
+      const finalAmount = action === 'add' ? amount : -amount;
+      
+      const newBalance = (details.balance || 0) + finalAmount;
+      const newWithdrawable = (details.withdrawable_balance || 0) + finalAmount;
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ 
+          balance: newBalance,
+          withdrawable_balance: newWithdrawable
+        })
+        .eq('id', userId);
+
+      if (profileError) throw profileError;
+
+      const { error: txError } = await supabase.from('transactions').insert({
+        user_id: userId,
+        type: action === 'add' ? 'deposit' : 'withdrawal',
+        amount: finalAmount,
+        status: 'completed',
+        details: adminNote || (action === 'add' ? 'إرسال يدوي من الإدارة' : 'خصم يدوي من الإدارة'),
+        date: new Date().toISOString()
+      });
+
+      if (txError) throw txError;
+
+      showToast(`تم ${action === 'add' ? 'إضافة' : 'خصم'} ${amount} USDT بنجاح`, "success");
+      setAdminAmount('');
+      setAdminNote('');
+      fetchUser();
+    } catch (err: any) {
+      showToast(err.message, "error");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div className="fixed inset-0 z-[1000] bg-black/95 flex items-center justify-center p-6 backdrop-blur-xl animate-in fade-in duration-300">
+      <div className="bg-[#0b1424] w-full max-w-md rounded-[4rem] p-10 space-y-8 relative overflow-y-auto max-h-[90vh] shadow-2xl border border-white/10 no-scrollbar text-right">
+        <button onClick={onClose} className="absolute top-8 right-8 p-2.5 bg-white/5 rounded-2xl text-white"><X size={20}/></button>
+        <div className="flex justify-center mb-4">
+          <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl uppercase font-black text-3xl italic">
+            {details?.first_name?.[0]}
+          </div>
+        </div>
+        <h3 className="text-center font-black italic text-3xl uppercase text-white">تفاصيل العضو</h3>
+        
+        <div className="space-y-4 rtl text-right">
+          <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 space-y-2">
+            <p className="text-slate-500 text-[10px] font-black uppercase">الاسم الكامل</p>
+            <p className="text-white font-bold text-lg">{details?.first_name}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 space-y-1">
+               <p className="text-slate-500 text-[10px] font-black uppercase">الرصيد</p>
+               <p className="text-blue-500 font-black italic text-xl">{details?.balance?.toFixed(2)}</p>
+            </div>
+            <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 space-y-1">
+               <p className="text-slate-500 text-[10px] font-black uppercase">الماكينات</p>
+               <p className="text-emerald-500 font-black italic text-xl">{details?.machines?.length}</p>
+            </div>
+          </div>
+
+          <div className="bg-blue-600/5 p-8 rounded-[3rem] border border-blue-500/10 space-y-6 mt-4">
+            <h4 className="text-blue-400 font-black text-sm uppercase italic text-center">تعديل الرصيد يدوياً</h4>
+            <div className="space-y-4">
+              <input 
+                type="number" 
+                placeholder="المبلغ (USDT)" 
+                value={adminAmount}
+                onChange={e => setAdminAmount(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 p-5 rounded-2xl text-white text-center font-black text-xl outline-none"
+              />
+              <textarea 
+                placeholder="ملاحظة أو سبب العملية..." 
+                value={adminNote}
+                onChange={e => setAdminNote(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 p-4 rounded-2xl text-white text-sm outline-none text-right resize-none h-24"
+              />
+              <div className="flex gap-4">
+                <button 
+                  disabled={isUpdating}
+                  onClick={() => handleUpdateBalance('subtract')}
+                  className="flex-1 bg-red-600/20 text-red-500 py-4 rounded-2xl font-black text-xs uppercase border border-red-500/20 flex items-center justify-center gap-2"
+                >
+                  <Minus size={14}/> خصم
+                </button>
+                <button 
+                  disabled={isUpdating}
+                  onClick={() => handleUpdateBalance('add')}
+                  className="flex-1 bg-emerald-600/20 text-emerald-500 py-4 rounded-2xl font-black text-xs uppercase border border-emerald-500/20 flex items-center justify-center gap-2"
+                >
+                  <Plus size={14}/> إرسال
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button onClick={onClose} className="w-full bg-white text-black py-6 rounded-[2.5rem] font-black text-sm shadow-2xl active:scale-95 transition-all">إغلاق</button>
+      </div>
     </div>
   );
 }
@@ -339,162 +471,6 @@ function HomeView({ user, onShowInfo, onShowRecharge, onShowWithdraw, onShowSupp
             </div>
           ))}
         </div>
-      </div>
-    </div>
-  );
-}
-
-// --- Machines View ---
-function MachinesView({ user, onBuy }: any) {
-  return (
-    <div className="space-y-6 animate-in fade-in pb-10">
-      {MACHINES.map((machine) => {
-        const isOwned = user.ownedMachines.some((m: any) => m.machine_id === machine.id);
-        return (
-          <div key={machine.id} className={`${machine.color} p-8 rounded-[3.5rem] relative overflow-hidden group shadow-2xl transition-all hover:scale-[1.02]`}>
-             <div className="flex flex-row-reverse justify-between items-start mb-6">
-                <div className="flex flex-row-reverse items-center gap-4">
-                   <div className="w-16 h-16 bg-white/10 rounded-3xl flex items-center justify-center text-white shadow-inner backdrop-blur-md"><Bookmark size={32} /></div>
-                   <div className="text-right">
-                      <h3 className="text-xl font-black italic text-white uppercase tracking-tighter">{machine.name}</h3>
-                      <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest mt-0.5">{machine.description}</p>
-                   </div>
-                </div>
-                <div className="text-right">
-                   <p className="text-[9px] text-white/50 font-black uppercase mb-0.5">سعر العقد</p>
-                   <p className="text-3xl font-black text-white italic tracking-tighter">{machine.price}<span className="text-xs not-italic ml-0.5 text-blue-400">USDT</span></p>
-                </div>
-             </div>
-             <div className="flex flex-row-reverse justify-around gap-2 mb-8">
-                <div className="flex-1 bg-black/40 p-4 rounded-[2rem] border border-white/5 text-center backdrop-blur-md">
-                   <Activity size={18} className="mx-auto mb-1.5 text-emerald-400" />
-                   <p className="text-[15px] font-black text-emerald-400 italic">+{machine.dailyProfit}</p>
-                </div>
-                <div className="flex-1 bg-black/40 p-4 rounded-[2rem] border border-white/5 text-center backdrop-blur-md">
-                   <Calendar size={18} className="mx-auto mb-1.5 text-blue-400" />
-                   <p className="text-[15px] font-black text-blue-400 italic">{machine.duration} يوم</p>
-                </div>
-                <div className="flex-1 bg-black/40 p-4 rounded-[2rem] border border-white/5 text-center backdrop-blur-md">
-                   <TrendingUp size={18} className="mx-auto mb-1.5 text-orange-400" />
-                   <p className="text-[15px] font-black text-orange-400 italic">+{ (machine.dailyProfit * machine.duration).toFixed(1) }</p>
-                </div>
-             </div>
-             <button onClick={() => !isOwned && onBuy(machine)} className={`w-full py-5 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 ${isOwned ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-white text-black hover:bg-blue-50'}`}>
-                <div className={`w-2 h-2 rounded-full ${isOwned ? 'bg-emerald-500 animate-pulse' : 'bg-black'}`}></div>
-                {isOwned ? "عقد مفعل وشغال" : "تفعيل بروتوكول التعدين"}
-             </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// --- Tasks View ---
-function TasksView({ user, onComplete }: any) {
-  return (
-    <div className="space-y-6 animate-in fade-in pb-10">
-      <div className="bg-[#0b1424] p-10 rounded-[3.5rem] border border-blue-500/10 shadow-2xl relative overflow-hidden flex flex-row-reverse items-center justify-between">
-         <div className="text-right relative z-10">
-            <h3 className="text-white font-black text-3xl italic uppercase tracking-tighter">مركز الحصاد</h3>
-            <p className="text-[10px] text-blue-500 font-black tracking-widest mt-1 uppercase">OPERATIONAL STATUS: ACTIVE</p>
-         </div>
-         <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl"><ListTodo size={40} /></div>
-      </div>
-      <div className="space-y-6">
-        {user.ownedMachines.map((um: UserMachine) => {
-          const m = MACHINES.find(x => x.id === um.machine_id);
-          const canClaim = !um.last_claim_date || (Date.now() - new Date(um.last_claim_date).getTime() >= 24 * 60 * 60 * 1000);
-          return (
-            <div key={um.id} className="bg-[#0b1424] p-8 rounded-[3.5rem] border border-white/5 shadow-2xl relative overflow-hidden">
-               <div className="flex flex-row-reverse justify-between items-center mb-6">
-                  <div className="flex flex-row-reverse items-center gap-4 text-right">
-                     <div className="w-16 h-16 bg-white/5 rounded-3xl flex items-center justify-center text-slate-400"><Database size={32} /></div>
-                     <div><h4 className="text-lg font-black italic text-white uppercase tracking-tighter">{m?.name}</h4><p className="text-[9px] text-slate-600 font-black uppercase tracking-widest mt-0.5">SYNCING...</p></div>
-                  </div>
-                  <div className="text-right">
-                     <p className="text-[9px] text-slate-600 font-black uppercase tracking-widest">العائد اليومي</p>
-                     <p className="text-3xl font-black text-white italic">{m?.dailyProfit}+</p>
-                  </div>
-               </div>
-               
-               <div className="space-y-3 mb-8">
-                  <div className="flex flex-row-reverse justify-between text-[9px] font-black text-slate-600 uppercase tracking-widest px-1">
-                     <span>COMPLETE 22%</span>
-                     <span>18.7H REMAINING</span>
-                  </div>
-                  <div className="w-full h-2.5 bg-white/5 rounded-full overflow-hidden">
-                     <div className="h-full bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.8)]" style={{ width: '22%' }}></div>
-                  </div>
-               </div>
-
-               <button onClick={() => canClaim && onComplete(um)} disabled={!canClaim} className={`w-full py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 ${canClaim ? 'bg-[#10b981] text-white shadow-[0_10px_20px_rgba(16,185,129,0.3)]' : 'bg-black/30 text-slate-600 border border-white/5'}`}>
-                  {canClaim ? <><Sparkles size={16} /> حصاد الأرباح <ChevronRight size={16}/></> : <><Loader2 size={16} className="animate-spin" /> قيد التعدين</>}
-               </button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// --- User Details Modal (Admin) ---
-function UserDetailsModal({ userId, onClose, showToast }: any) {
-  const [details, setDetails] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-        const { data: machines } = await supabase.from('user_machines').select('*').eq('user_id', userId);
-        if (profile) {
-          setDetails({ ...profile, machines: machines || [] });
-        }
-      } catch (err: any) {
-        showToast(err.message, "error");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUser();
-  }, [userId, showToast]);
-
-  if (loading) return null;
-
-  return (
-    <div className="fixed inset-0 z-[1000] bg-black/95 flex items-center justify-center p-6 backdrop-blur-xl animate-in fade-in duration-300">
-      <div className="bg-[#0b1424] w-full max-w-md rounded-[4rem] p-10 space-y-8 relative overflow-y-auto max-h-[90vh] shadow-2xl border border-white/10 no-scrollbar text-right">
-        <button onClick={onClose} className="absolute top-8 right-8 p-2.5 bg-white/5 rounded-2xl text-white"><X size={20}/></button>
-        <div className="flex justify-center mb-4">
-          <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl uppercase font-black text-3xl italic">
-            {details?.first_name?.[0]}
-          </div>
-        </div>
-        <h3 className="text-center font-black italic text-3xl uppercase text-white">تفاصيل العضو</h3>
-        
-        <div className="space-y-4 rtl text-right">
-          <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 space-y-2">
-            <p className="text-slate-500 text-[10px] font-black uppercase">الاسم الكامل</p>
-            <p className="text-white font-bold text-lg">{details?.first_name}</p>
-          </div>
-          <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 space-y-2">
-            <p className="text-slate-500 text-[10px] font-black uppercase">البريد الإلكتروني</p>
-            <p className="text-white font-mono text-xs">{details?.email}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 space-y-1">
-               <p className="text-slate-500 text-[10px] font-black uppercase">الرصيد</p>
-               <p className="text-blue-500 font-black italic text-xl">{details?.balance?.toFixed(2)}</p>
-            </div>
-            <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 space-y-1">
-               <p className="text-slate-500 text-[10px] font-black uppercase">الماكينات</p>
-               <p className="text-emerald-500 font-black italic text-xl">{details?.machines?.length}</p>
-            </div>
-          </div>
-        </div>
-        <button onClick={onClose} className="w-full bg-blue-600 py-6 rounded-[2.5rem] font-black text-white text-base shadow-2xl active:scale-95 transition-all">إغلاق</button>
       </div>
     </div>
   );
@@ -633,40 +609,232 @@ function AdminView({ showToast, adminUUID, onOpenChatWithUser }: any) {
   );
 }
 
-// --- Restored Component Modals ---
-function RechargeModal({ onClose, onDeposit, userId }: any) {
+function MachinesView({ user, onBuy }: any) {
+  return (
+    <div className="space-y-6 animate-in fade-in pb-10">
+      {MACHINES.map((machine) => {
+        const isOwned = user.ownedMachines.some((m: any) => m.machine_id === machine.id);
+        return (
+          <div key={machine.id} className={`${machine.color} p-8 rounded-[3.5rem] relative overflow-hidden group shadow-2xl transition-all hover:scale-[1.02]`}>
+             <div className="flex flex-row-reverse justify-between items-start mb-6">
+                <div className="flex flex-row-reverse items-center gap-4">
+                   <div className="w-16 h-16 bg-white/10 rounded-3xl flex items-center justify-center text-white shadow-inner backdrop-blur-md"><Bookmark size={32} /></div>
+                   <div className="text-right">
+                      <h3 className="text-xl font-black italic text-white uppercase tracking-tighter">{machine.name}</h3>
+                      <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest mt-0.5">{machine.description}</p>
+                   </div>
+                </div>
+                <div className="text-right">
+                   <p className="text-[9px] text-white/50 font-black uppercase mb-0.5">سعر العقد</p>
+                   <p className="text-3xl font-black text-white italic tracking-tighter">{machine.price}<span className="text-xs not-italic ml-0.5 text-blue-400">USDT</span></p>
+                </div>
+             </div>
+             <div className="flex flex-row-reverse justify-around gap-2 mb-8">
+                <div className="flex-1 bg-black/40 p-4 rounded-[2rem] border border-white/5 text-center backdrop-blur-md">
+                   <Activity size={18} className="mx-auto mb-1.5 text-emerald-400" />
+                   <p className="text-[15px] font-black text-emerald-400 italic">+{machine.dailyProfit}</p>
+                </div>
+                <div className="flex-1 bg-black/40 p-4 rounded-[2rem] border border-white/5 text-center backdrop-blur-md">
+                   <Calendar size={18} className="mx-auto mb-1.5 text-blue-400" />
+                   <p className="text-[15px] font-black text-blue-400 italic">{machine.duration} يوم</p>
+                </div>
+                <div className="flex-1 bg-black/40 p-4 rounded-[2rem] border border-white/5 text-center backdrop-blur-md">
+                   <TrendingUp size={18} className="mx-auto mb-1.5 text-orange-400" />
+                   <p className="text-[15px] font-black text-orange-400 italic">+{ (machine.dailyProfit * machine.duration).toFixed(1) }</p>
+                </div>
+             </div>
+             <button onClick={() => !isOwned && onBuy(machine)} className={`w-full py-5 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 ${isOwned ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-white text-black hover:bg-blue-50'}`}>
+                <div className={`w-2 h-2 rounded-full ${isOwned ? 'bg-emerald-500 animate-pulse' : 'bg-black'}`}></div>
+                {isOwned ? "عقد مفعل وشغال" : "تفعيل بروتوكول التعدين"}
+             </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TasksView({ user, onComplete }: any) {
+  return (
+    <div className="space-y-6 animate-in fade-in pb-10">
+      <div className="bg-[#0b1424] p-10 rounded-[3.5rem] border border-blue-500/10 shadow-2xl relative overflow-hidden flex flex-row-reverse items-center justify-between">
+         <div className="text-right relative z-10">
+            <h3 className="text-white font-black text-3xl italic uppercase tracking-tighter">مركز الحصاد</h3>
+            <p className="text-[10px] text-blue-500 font-black tracking-widest mt-1 uppercase">OPERATIONAL STATUS: ACTIVE</p>
+         </div>
+         <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl"><ListTodo size={40} /></div>
+      </div>
+      <div className="space-y-6">
+        {user.ownedMachines.map((um: UserMachine) => {
+          const m = MACHINES.find(x => x.id === um.machine_id);
+          const canClaim = !um.last_claim_date || (Date.now() - new Date(um.last_claim_date).getTime() >= 24 * 60 * 60 * 1000);
+          return (
+            <div key={um.id} className="bg-[#0b1424] p-8 rounded-[3.5rem] border border-white/5 shadow-2xl relative overflow-hidden">
+               <div className="flex flex-row-reverse justify-between items-center mb-6">
+                  <div className="flex flex-row-reverse items-center gap-4 text-right">
+                     <div className="w-16 h-16 bg-white/5 rounded-3xl flex items-center justify-center text-slate-400"><Database size={32} /></div>
+                     <div><h4 className="text-lg font-black italic text-white uppercase tracking-tighter">{m?.name}</h4><p className="text-[9px] text-slate-600 font-black uppercase tracking-widest mt-0.5">SYNCING...</p></div>
+                  </div>
+                  <div className="text-right">
+                     <p className="text-[9px] text-slate-600 font-black uppercase tracking-widest">العائد اليومي</p>
+                     <p className="text-3xl font-black text-white italic">{m?.dailyProfit}+</p>
+                  </div>
+               </div>
+               
+               <div className="space-y-3 mb-8">
+                  <div className="flex flex-row-reverse justify-between text-[9px] font-black text-slate-600 uppercase tracking-widest px-1">
+                     <span>COMPLETE 22%</span>
+                     <span>18.7H REMAINING</span>
+                  </div>
+                  <div className="w-full h-2.5 bg-white/5 rounded-full overflow-hidden">
+                     <div className="h-full bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.8)]" style={{ width: '22%' }}></div>
+                  </div>
+               </div>
+
+               <button onClick={() => canClaim && onComplete(um)} disabled={!canClaim} className={`w-full py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 ${canClaim ? 'bg-[#10b981] text-white shadow-[0_10px_20px_rgba(16,185,129,0.3)]' : 'bg-black/30 text-slate-600 border border-white/5'}`}>
+                  {canClaim ? <><Sparkles size={16} /> حصاد الأرباح <ChevronRight size={16}/></> : <><Loader2 size={16} className="animate-spin" /> قيد التعدين</>}
+               </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RechargeModal({ onClose, onDeposit, userId, showToast }: any) {
   const [amount, setAmount] = useState('');
   const [proof, setProof] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  
   const submit = async () => {
     if (!proof || !amount) return;
     setLoading(true);
     try {
-      await supabase.from('transactions').insert({ user_id: userId, type: 'deposit', amount: Number(amount), status: 'pending', proof_url: proof, details: 'إيداع من المستخدم', date: new Date().toISOString() });
-      onClose(); onDeposit();
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+      const { error } = await supabase.from('transactions').insert({ 
+        user_id: userId, 
+        type: 'deposit', 
+        amount: Number(amount), 
+        status: 'pending', 
+        proof_url: proof, 
+        details: 'إيداع من المستخدم', 
+        date: new Date().toISOString() 
+      });
+      if (error) throw error;
+      showToast("تم إرسال طلب الإيداع بنجاح، سيتم المراجعة فوراً", "success");
+      onClose(); 
+      onDeposit();
+    } catch (e: any) { 
+      showToast(e.message || "حدث خطأ أثناء الإرسال", "error");
+    } finally { 
+      setLoading(false); 
+    }
   };
+
+  const copyAddress = () => {
+    navigator.clipboard.writeText(DEPOSIT_ADDRESS);
+    showToast("تم نسخ العنوان بنجاح", "info");
+  };
+
   return (
-    <div className="fixed inset-0 z-[600] bg-black/95 flex items-center justify-center p-6 backdrop-blur-xl animate-in fade-in duration-300">
-      <div className="bg-[#0b1424] w-full max-w-sm rounded-[4rem] p-10 space-y-8 relative overflow-y-auto max-h-[95vh] shadow-2xl border border-white/10 no-scrollbar">
-        <button onClick={onClose} className="absolute top-8 right-8 p-2.5 bg-white/5 rounded-2xl"><X size={20}/></button>
-        <h3 className="text-center font-black italic text-3xl uppercase text-white">شحن الرصيد</h3>
-        <div className="bg-black/40 p-6 rounded-[2rem] text-center border border-white/5 shadow-inner relative group cursor-pointer" onClick={() => { navigator.clipboard.writeText(DEPOSIT_ADDRESS); }}>
-           <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-blue-600 rounded-xl shadow-lg active:scale-90 transition-all"><Copy size={16}/></div>
-           <p className="text-[9px] break-all font-mono text-white/90 pl-10 pr-4">{DEPOSIT_ADDRESS}</p>
+    <div className="fixed inset-0 z-[600] bg-black/95 flex items-center justify-center p-4 backdrop-blur-xl animate-in fade-in duration-300">
+      <div className="bg-[#0b1424] w-full max-w-lg rounded-[3.5rem] p-10 space-y-8 relative overflow-y-auto max-h-[95vh] shadow-2xl border border-white/10 no-scrollbar rtl text-right">
+        {/* Close Button */}
+        <button onClick={onClose} className="absolute top-8 right-8 p-2.5 bg-white/5 rounded-2xl text-slate-400 hover:text-white transition-colors">
+          <X size={24}/>
+        </button>
+
+        {/* Title & Network */}
+        <div className="text-center space-y-1">
+          <h3 className="font-black italic text-4xl uppercase text-white tracking-tighter">شحن الرصيد</h3>
+          <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">NETWORK: {NETWORK}</p>
         </div>
-        <div className="space-y-4 text-right">
-           <label className="text-[10px] text-slate-600 font-black uppercase px-2">المبلغ المودع</label>
-           <div className="bg-[#020617] p-8 rounded-[2rem] text-center border border-white/5 shadow-inner">
-             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="w-full bg-transparent outline-none text-center text-5xl font-black italic text-white" />
+
+        {/* Wallet Address Box */}
+        <div className="bg-[#151d30] p-6 rounded-[2rem] border border-white/5 shadow-inner flex flex-row-reverse items-center justify-between group transition-all hover:border-blue-500/30">
+           <div className="flex-1 px-4 overflow-hidden">
+             <p className="text-[10px] break-all font-mono text-blue-400 font-bold leading-relaxed">{DEPOSIT_ADDRESS}</p>
+           </div>
+           <button onClick={copyAddress} className="p-4 bg-blue-600 text-white rounded-2xl shadow-xl active:scale-90 transition-all flex items-center justify-center shrink-0">
+             <Copy size={20}/>
+           </button>
+        </div>
+
+        {/* Amount Input */}
+        <div className="space-y-3">
+           <label className="text-[11px] text-slate-500 font-black uppercase px-2">المبلغ المودع</label>
+           <div className="bg-[#020617] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden">
+             <div className="absolute inset-0 bg-blue-600/5 blur-3xl opacity-50 pointer-events-none"></div>
+             <input 
+               type="number" 
+               value={amount} 
+               onChange={e => setAmount(e.target.value)} 
+               placeholder="0.00" 
+               className="w-full bg-transparent outline-none text-center text-6xl font-black italic text-white placeholder-white/10 relative z-10" 
+             />
            </div>
         </div>
-        <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onloadend = () => setProof(r.result as string); r.readAsDataURL(f); } }} className="hidden" id="fileRecharge" />
-        <label htmlFor="fileRecharge" className="w-full h-48 bg-white/5 border-2 border-dashed border-white/10 rounded-[3rem] flex flex-col items-center justify-center cursor-pointer overflow-hidden shadow-inner">
-           {proof ? <img src={proof} className="w-full h-full object-cover" alt="Proof" /> : <><ImageIcon className="text-slate-600 mb-3" size={48} /><p className="text-[11px] text-slate-500 font-black uppercase tracking-widest">إرفاق لقطة شاشة</p></>}
-        </label>
-        <button onClick={submit} disabled={loading || !amount || !proof} className="w-full bg-blue-600 py-6 rounded-[2.5rem] font-black text-white text-base shadow-2xl active:scale-95 transition-all">تأكيد</button>
+
+        {/* Instruction Message Box */}
+        <div className="bg-blue-600/5 border border-blue-500/20 p-6 rounded-[2.2rem] flex flex-row-reverse items-start gap-4">
+           <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg">
+             <Info size={20} />
+           </div>
+           <p className="text-[11px] text-slate-300 font-bold leading-relaxed">
+             يجب إرفاق لقطة شاشة واضحة من محفظتك توضح تفاصيل عملية التحويل (مكتملة) لضمان سرعة معالجة الطلب.
+           </p>
+        </div>
+
+        {/* Image Upload Area */}
+        <div className="space-y-3">
+          <p className="text-[11px] text-slate-500 font-black uppercase px-2">إرفاق لقطة شاشة للإثبات</p>
+          <input 
+            type="file" 
+            accept="image/*" 
+            onChange={e => { 
+              const f = e.target.files?.[0]; 
+              if (f) { 
+                const r = new FileReader(); 
+                r.onloadend = () => setProof(r.result as string); 
+                r.readAsDataURL(f); 
+              } 
+            }} 
+            className="hidden" 
+            id="fileRecharge" 
+          />
+          <label htmlFor="fileRecharge" className="w-full h-56 bg-white/5 border-2 border-dashed border-white/10 rounded-[3rem] flex flex-col items-center justify-center cursor-pointer overflow-hidden shadow-inner group hover:border-blue-500/50 transition-all">
+             {proof ? (
+               <div className="w-full h-full relative">
+                 <img src={proof} className="w-full h-full object-cover" alt="Proof" />
+                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <p className="text-white font-black text-xs uppercase">تغيير الصورة</p>
+                 </div>
+               </div>
+             ) : (
+               <div className="text-center space-y-3">
+                 <div className="w-16 h-16 bg-white/5 rounded-3xl flex items-center justify-center text-slate-600 mx-auto group-hover:scale-110 transition-all">
+                    <ImageIcon size={40} />
+                 </div>
+                 <p className="text-[12px] text-slate-500 font-black uppercase tracking-widest">اضغط لاختيار صورة</p>
+               </div>
+             )}
+          </label>
+        </div>
+
+        {/* Security Footer */}
+        <div className="flex items-center justify-center gap-2 text-emerald-500/60 pb-2">
+           <Lock size={12} />
+           <span className="text-[9px] font-black uppercase tracking-widest">بروتوكول تشفير الإيداع نشط ومؤمن بالكامل</span>
+        </div>
+
+        {/* Submit Button */}
+        <button 
+          onClick={submit} 
+          disabled={loading || !amount || !proof} 
+          className="w-full bg-blue-600 hover:bg-blue-500 py-7 rounded-[2.5rem] font-black text-white text-xl shadow-[0_15px_30px_rgba(37,99,235,0.4)] active:scale-95 transition-all disabled:opacity-30 disabled:pointer-events-none uppercase tracking-widest"
+        >
+          {loading ? <Loader2 className="animate-spin mx-auto" size={28} /> : "تأكيـد"}
+        </button>
       </div>
     </div>
   );
@@ -850,15 +1018,12 @@ function SupportChatModal({ onClose, userId, initialAdminId, targetUserId }: any
   );
 }
 
-// --- Team View ---
 function TeamView({ user, showToast }: any) {
   const referralUrl = `${window.location.origin}/#/auth?ref=${user.id}`;
-  
   const copyLink = () => {
     navigator.clipboard.writeText(referralUrl);
     showToast("تم نسخ رابط الدعوة", "success");
   };
-
   return (
     <div className="space-y-6 animate-in fade-in pb-10 text-right">
       <div className="bg-[#0b1424] p-10 rounded-[3.5rem] border border-blue-500/10 shadow-2xl relative overflow-hidden flex flex-row-reverse items-center justify-between">
@@ -868,7 +1033,6 @@ function TeamView({ user, showToast }: any) {
          </div>
          <div className="w-20 h-20 bg-emerald-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl"><Users size={40} /></div>
       </div>
-
       <div className="bg-[#0b1424] p-8 rounded-[3.5rem] border border-white/5 shadow-2xl space-y-6">
         <div className="space-y-4">
           <h4 className="text-white font-black italic text-lg uppercase tracking-widest">رابط الإحالة الخاص بك</h4>
@@ -877,7 +1041,6 @@ function TeamView({ user, showToast }: any) {
              <p className="text-[10px] break-all font-mono text-white/90 pl-12 pr-4 text-left">{referralUrl}</p>
           </div>
         </div>
-        
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 text-center space-y-2">
             <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">أرباح الدعوات</p>
@@ -888,19 +1051,11 @@ function TeamView({ user, showToast }: any) {
             <p className="text-2xl font-black italic text-blue-500">{(REFERRAL_PERCENT * 100)}%</p>
           </div>
         </div>
-
-        <section className="bg-blue-600/5 p-6 rounded-[2.5rem] border border-blue-600/10 space-y-3">
-          <h4 className="text-blue-400 font-black text-sm flex items-center gap-2 flex-row-reverse"><Info size={16}/> دليل العمل</h4>
-          <p className="text-slate-300 text-xs leading-relaxed font-bold">
-            كل عضو يسجل عن طريقك ويقوم بشحن رصيده، ستحصل تلقائياً على 10% من قيمة شحنه كمكافأة فورية في رصيدك. لا يوجد حد أقصى لعدد الأشخاص الذين يمكنك دعوتهم.
-          </p>
-        </section>
       </div>
     </div>
   );
 }
 
-// --- App Root ---
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
