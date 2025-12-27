@@ -484,9 +484,10 @@ function AdminView({ showToast, adminUUID, onOpenChatWithUser }: any) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUserDetails, setSelectedUserDetails] = useState<string | null>(null);
+  const pollingRef = useRef<number | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       if (mainTab === 'members') {
         const { data: users } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
@@ -504,7 +505,12 @@ function AdminView({ showToast, adminUUID, onOpenChatWithUser }: any) {
             const otherId = m.sender_id === currentId ? m.receiver_id : m.sender_id;
             if (otherId && otherId !== currentId && !seenParties.has(otherId)) {
               seenParties.add(otherId);
-              uniqueConversations.push({ ...m, counterparty: profiles?.find(p => p.id === otherId) });
+              uniqueConversations.push({ 
+                ...m, 
+                counterparty: profiles?.find(p => p.id === otherId),
+                lastMessage: m.message,
+                lastDate: m.created_at
+              });
             }
           });
           setData(uniqueConversations);
@@ -525,13 +531,19 @@ function AdminView({ showToast, adminUUID, onOpenChatWithUser }: any) {
     finally { setLoading(false); }
   }, [mainTab, subTab, adminUUID, showToast]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { 
+    fetchData(); 
+    if (mainTab === 'messages') {
+      pollingRef.current = window.setInterval(() => fetchData(true), 4000);
+    }
+    return () => { if (pollingRef.current) window.clearInterval(pollingRef.current); };
+  }, [fetchData, mainTab]);
 
   const filteredData = useMemo(() => {
     if (!searchTerm) return data;
     const term = searchTerm.toLowerCase();
     return data.filter(item => {
-      const p = item.profiles || item.counterparty || item;
+      const p = item.profiles || item.counterparty || (mainTab === 'members' ? item : null);
       return p?.first_name?.toLowerCase().includes(term) || p?.email?.toLowerCase().includes(term) || p?.id?.toLowerCase().includes(term);
     });
   }, [data, searchTerm]);
@@ -580,8 +592,27 @@ function AdminView({ showToast, adminUUID, onOpenChatWithUser }: any) {
            {filteredData.map(item => {
               const p = item.profiles || item.counterparty || (mainTab === 'members' ? item : null);
               const name = p?.first_name || "مجهول";
+              
+              if (mainTab === 'messages') {
+                return (
+                  <div key={item.id} onClick={() => onOpenChatWithUser(p.id)} className="bg-[#0b1424] p-6 rounded-[2.5rem] border border-white/10 flex flex-row-reverse items-center justify-between shadow-2xl transition-all cursor-pointer active:scale-95 group hover:border-blue-500/40">
+                    <div className="flex items-center gap-5 flex-row-reverse flex-1 overflow-hidden">
+                       <div className="w-16 h-16 bg-blue-600 rounded-[1.8rem] flex items-center justify-center text-white font-black italic text-2xl uppercase shrink-0 group-hover:scale-105 transition-transform">{name[0]}</div>
+                       <div className="text-right overflow-hidden flex-1">
+                          <h5 className="text-white font-black italic uppercase tracking-tighter text-lg">{name}</h5>
+                          <p className="text-[11px] text-blue-500 font-bold truncate italic">{item.lastMessage}</p>
+                       </div>
+                    </div>
+                    <div className="text-left shrink-0 ml-4 flex flex-col items-end gap-1">
+                       <p className="text-[9px] text-slate-600 font-black uppercase">{new Date(item.lastDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                       <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                    </div>
+                  </div>
+                );
+              }
+
               return (
-                <div key={item.id} onClick={() => mainTab === 'messages' ? onOpenChatWithUser(p.id) : setSelectedUserDetails(p.id)} className="bg-[#0b1424] p-8 rounded-[3.5rem] border border-white/10 space-y-6 shadow-2xl transition-all cursor-pointer active:scale-95">
+                <div key={item.id} onClick={() => setSelectedUserDetails(p.id)} className="bg-[#0b1424] p-8 rounded-[3.5rem] border border-white/10 space-y-6 shadow-2xl transition-all cursor-pointer active:scale-95">
                    <div className="flex flex-row-reverse justify-between items-center text-right">
                       <div className="flex items-center gap-5 flex-row-reverse">
                          <div className="w-16 h-16 bg-blue-600 rounded-[1.8rem] flex items-center justify-center text-white font-black italic text-2xl uppercase">{name[0]}</div>
@@ -988,7 +1019,7 @@ function SupportChatModal({ onClose, userId, initialAdminId, targetUserId }: any
         .order('created_at', { ascending: true });
       
       if (data) {
-        // Only update state if data actually changed to avoid unnecessary re-renders
+        // Only update state if data actually changed
         setMessages(prev => {
           if (JSON.stringify(prev) !== JSON.stringify(data)) return data;
           return prev;
