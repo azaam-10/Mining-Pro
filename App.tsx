@@ -9,7 +9,7 @@ import {
   ExternalLink, Calendar, AlertCircle, Headphones, Plus, Minus, Lock, Image as ImageIcon,
   Coins, Shield, BadgeCheck, LifeBuoy, Search, CheckCircle2, Mail, Clock, StickyNote, Bookmark,
   Sparkles, ZapOff, Database, ChevronRight, CheckCircle, HelpCircle, Wallet, ShieldAlert,
-  ArrowDownRight, PlayCircle
+  ArrowDownRight, PlayCircle, Smartphone, DownloadCloud
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL, REFERRAL_PERCENT, NETWORK } from './constants';
@@ -417,6 +417,22 @@ function HomeView({ user, onShowInfo, onShowRecharge, onShowWithdraw, onShowSupp
         </div>
         <ChevronRight className="text-white/40" />
       </button>
+
+      {/* Download APK Section */}
+      <div className="bg-[#0b1424] p-6 rounded-[2.5rem] border border-white/5 flex flex-row-reverse items-center justify-between shadow-xl group hover:border-blue-500/20 transition-all cursor-pointer" onClick={() => window.open('https://your-apk-link.com/app.apk', '_blank')}>
+        <div className="flex items-center gap-4 flex-row-reverse">
+          <div className="w-14 h-14 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
+             <Smartphone size={30} />
+          </div>
+          <div className="text-right">
+             <h4 className="text-white font-black text-sm italic uppercase tracking-tight">تطبيق MINEPRO الرسمي</h4>
+             <p className="text-[10px] text-blue-500 font-bold uppercase tracking-widest">تحميل ملف APK للأندرويد</p>
+          </div>
+        </div>
+        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
+          <DownloadCloud size={18} />
+        </div>
+      </div>
 
       {/* Rescue Stuck Funds Card - Enhanced UI */}
       <div className="bg-gradient-to-br from-[#1e1b4b] to-[#020617] p-8 rounded-[3.5rem] border border-blue-500/30 shadow-[0_20px_50px_rgba(30,27,75,0.6)] relative overflow-hidden group border-t-blue-400/20">
@@ -900,38 +916,86 @@ function WithdrawModal({ onClose, onWithdraw, userData, userId, showToast }: any
   const [loading, setLoading] = useState(false);
   const minRequired = MIN_WITHDRAWAL;
   const isAmountLow = Number(amount) > 0 && Number(amount) < minRequired;
+  
   const submit = async () => {
+    if (loading) return;
     const amt = Number(amount);
-    if (amt < minRequired || amt > userData.withdrawableBalance || !address.trim()) return;
+    
+    if (amt < minRequired) {
+      showToast(`الحد الأدنى للسحب هو ${minRequired} USDT`, "error");
+      return;
+    }
+    
+    if (amt > userData.withdrawableBalance) {
+      showToast("المبلغ المطلوب يتجاوز الرصيد القابل للسحب (الأرباح فقط)", "error");
+      return;
+    }
+
+    if (!address.trim()) {
+      showToast("يرجى إدخال عنوان المحفظة", "error");
+      return;
+    }
+
     setLoading(true);
     try {
-      await supabase.from('transactions').insert({ user_id: userId, type: 'withdrawal', amount: -amt, status: 'pending', details: address, date: new Date().toISOString() });
-      await supabase.from('profiles').update({ balance: Number(userData.balance) - amt, withdrawable_balance: Number(userData.withdrawableBalance) - amt }).eq('id', userId);
-      onClose(); onWithdraw();
+      await supabase.from('transactions').insert({ 
+        user_id: userId, 
+        type: 'withdrawal', 
+        amount: -amt, 
+        status: 'pending', 
+        details: address, 
+        date: new Date().toISOString() 
+      });
+      await supabase.from('profiles').update({ 
+        balance: Number(userData.balance) - amt, 
+        withdrawable_balance: Number(userData.withdrawableBalance) - amt 
+      }).eq('id', userId);
+      onClose(); 
+      onWithdraw();
       showToast("تم إرسال طلب السحب بنجاح", "success");
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch (e: any) { 
+      showToast(e.message || "حدث خطأ أثناء السحب", "error");
+    } finally { 
+      setLoading(false); 
+    }
   };
+
   return (
     <div className="fixed inset-0 z-[600] bg-black/95 flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 duration-300">
       <div className="bg-[#0b1424] w-full max-w-sm rounded-[4rem] p-10 space-y-8 relative border border-white/10 shadow-2xl text-right">
         <button onClick={onClose} className="absolute top-8 right-8 p-2.5 bg-white/5 rounded-2xl"><X size={20}/></button>
         <h3 className="text-center font-black italic text-3xl uppercase text-white">سحب الرصيد</h3>
-        <div className="bg-blue-600 p-8 rounded-[2.5rem] text-center shadow-lg">
-           <p className="text-[10px] text-white/70 font-black mb-1 uppercase tracking-widest">المتاح للسحب الآن</p>
-           <p className="text-3xl font-black italic text-white uppercase tracking-tighter">USDT {(userData.withdrawableBalance || 0).toFixed(2)}</p>
+        
+        <div className="bg-blue-600 p-8 rounded-[2.5rem] text-center shadow-lg relative overflow-hidden">
+           <div className="absolute inset-0 bg-white/10 blur-xl"></div>
+           <p className="text-[10px] text-white/70 font-black mb-1 uppercase tracking-widest relative z-10">المتاح للسحب (الأرباح فقط)</p>
+           <p className="text-3xl font-black italic text-white uppercase tracking-tighter relative z-10">USDT {(userData.withdrawableBalance || 0).toFixed(2)}</p>
         </div>
+
+        <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-2xl flex flex-row-reverse items-center gap-3">
+           <AlertCircle size={18} className="text-orange-500 shrink-0" />
+           <p className="text-[9px] text-orange-200 font-bold leading-tight">تنبيه: يمكنك سحب الأرباح والعمولات فقط. مبالغ الإيداع تظل مخصصة لتشغيل الماكينات.</p>
+        </div>
+
         <div className="space-y-6">
            <div className="space-y-2">
               <label className="text-[10px] text-slate-500 font-black uppercase px-2">عنوان المحفظة (BEP20)</label>
-              <input value={address} onChange={e => setAddress(e.target.value)} placeholder="0x..." className="w-full bg-black/50 border border-white/5 p-6 rounded-[1.5rem] outline-none text-right font-mono text-xs italic" />
+              <input value={address} onChange={e => setAddress(e.target.value)} placeholder="0x..." className="w-full bg-black/50 border border-white/5 p-6 rounded-[1.5rem] outline-none text-right font-mono text-xs italic text-blue-400" />
            </div>
            <div className="space-y-2">
               <label className="text-[10px] text-slate-500 font-black uppercase px-2">المبلغ المطلوب</label>
-              <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.50" className="w-full bg-black/50 border border-white/5 p-6 rounded-[1.5rem] outline-none text-center font-black text-3xl italic" />
+              <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="w-full bg-black/50 border border-white/5 p-6 rounded-[1.5rem] outline-none text-center font-black text-3xl italic text-white" />
+              {isAmountLow && <p className="text-[9px] text-red-500 font-black mt-1 text-center">الحد الأدنى هو {minRequired} USDT</p>}
            </div>
         </div>
-        <button onClick={submit} disabled={loading || isAmountLow || !amount || !address} className="w-full bg-white text-black py-6 rounded-[2.5rem] font-black text-sm uppercase shadow-2xl active:scale-95 transition-all disabled:opacity-30">تأكيد سحب الأموال</button>
+
+        <button 
+          onClick={submit} 
+          disabled={loading || !amount || !address} 
+          className="w-full bg-white text-black py-6 rounded-[2.5rem] font-black text-sm uppercase shadow-2xl active:scale-95 transition-all disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center gap-2"
+        >
+          {loading ? <Loader2 size={18} className="animate-spin" /> : "تأكيد سحب الأموال"}
+        </button>
       </div>
     </div>
   );

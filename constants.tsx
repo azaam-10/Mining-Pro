@@ -4,7 +4,7 @@ import { Machine, Translations } from './types';
 export const ADMIN_EMAIL = "rwanatiya3@gmail.com";
 export const DEPOSIT_ADDRESS = "0xa24769407ae6635466dae7e6f2c2cee08b181158";
 export const NETWORK = "BEP20 (BSC)";
-export const MIN_WITHDRAWAL = 8;
+export const MIN_WITHDRAWAL = 10;
 export const REFERRAL_PERCENT = 0.10;
 
 const generateMachines = (): Machine[] => {
