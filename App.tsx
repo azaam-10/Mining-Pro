@@ -213,7 +213,7 @@ function GuidedTour({ onComplete }: { onComplete: () => void }) {
           left: '50%',
           transform: 'translateX(-50%)'
         }}
-        className="absolute w-[90%] max-w-sm transition-all duration-500 pointer-events-auto"
+        className="absolute w-[90%] max-sm:w-[95%] transition-all duration-500 pointer-events-auto"
       >
         <div className={`relative bg-blue-600 p-7 rounded-[2.5rem] shadow-[0_25px_70px_rgba(37,99,235,0.6)] border-2 border-white/20 animate-in slide-in-from-${isBottom ? 'top' : 'bottom'}-6`}>
           <div className={`absolute left-1/2 -translate-x-1/2 w-6 h-6 bg-blue-600 rotate-45 border-white/20 ${isBottom ? '-top-3 border-l-2 border-t-2' : '-bottom-3 border-r-2 border-b-2'}`}></div>
@@ -969,50 +969,168 @@ const AuthView = ({ lang, showToast }: any) => {
   );
 };
 
+// --- Polling Support Chat Modal ---
 function SupportChatModal({ onClose, userId, initialAdminId, targetUserId }: any) {
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pollingIntervalRef = useRef<number | null>(null);
   const otherPartyId = targetUserId || initialAdminId;
-  const fetchMessages = useCallback(async () => {
+
+  const fetchMessages = useCallback(async (isSilent = false) => {
     if (!userId || !otherPartyId) return;
-    const { data } = await supabase.from('support_messages').select('*').or(`and(sender_id.eq.${userId},receiver_id.eq.${otherPartyId}),and(sender_id.eq.${otherPartyId},receiver_id.eq.${userId})`).order('created_at', { ascending: true });
-    if (data) setMessages(data);
-    setLoading(false);
+    try {
+      const { data } = await supabase
+        .from('support_messages')
+        .select('*')
+        .or(`and(sender_id.eq.${userId},receiver_id.eq.${otherPartyId}),and(sender_id.eq.${otherPartyId},receiver_id.eq.${userId})`)
+        .order('created_at', { ascending: true });
+      
+      if (data) {
+        // Only update state if data actually changed to avoid unnecessary re-renders
+        setMessages(prev => {
+          if (JSON.stringify(prev) !== JSON.stringify(data)) return data;
+          return prev;
+        });
+      }
+    } catch (e) {
+      console.error("Polling error:", e);
+    } finally {
+      if (!isSilent) setLoading(false);
+    }
   }, [userId, otherPartyId]);
-  useEffect(() => { fetchMessages(); }, [fetchMessages]);
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [messages]);
+
+  // Set up 4-second polling
+  useEffect(() => {
+    fetchMessages(); // Initial fetch
+    pollingIntervalRef.current = window.setInterval(() => {
+      fetchMessages(true);
+    }, 4000);
+
+    return () => {
+      if (pollingIntervalRef.current) window.clearInterval(pollingIntervalRef.current);
+    };
+  }, [fetchMessages]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  }, [messages]);
+
   const sendMessage = async () => {
     if (!newMessage.trim() || !otherPartyId) return;
-    const text = newMessage; setNewMessage('');
+    const text = newMessage;
+    setNewMessage('');
     try {
-      await supabase.from('support_messages').insert({ sender_id: userId, receiver_id: otherPartyId, message: text, created_at: new Date().toISOString() });
-      fetchMessages();
-    } catch (e) { console.error(e); }
+      const { error } = await supabase.from('support_messages').insert({
+        sender_id: userId,
+        receiver_id: otherPartyId,
+        message: text,
+        created_at: new Date().toISOString()
+      });
+      if (error) throw error;
+      fetchMessages(true); // Immediate update after sending
+    } catch (e) {
+      console.error(e);
+      setNewMessage(text); // Restore if failed
+    }
   };
+
   return (
-    <div className="fixed inset-0 z-[600] bg-black/98 flex flex-col animate-in slide-in-from-bottom duration-300 backdrop-blur-3xl">
-      <div className="p-8 border-b border-white/10 flex justify-between items-center bg-[#0b1424] sticky top-0 z-10 text-right">
-        <button onClick={onClose} className="p-3 bg-white/5 rounded-2xl shadow-lg"><X size={24}/></button>
-        <div><h3 className="font-black text-white italic uppercase text-xl">الدعم المباشر</h3><p className="text-[10px] text-blue-500 font-black animate-pulse">قناة تواصل فورية</p></div>
-        <div className="w-12"></div>
-      </div>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6 no-scrollbar">
-        {loading ? <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={32} /></div> : messages.map((m) => (
-          <div key={m.id} className={`flex ${m.sender_id === userId ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] p-5 rounded-[2.5rem] shadow-xl ${m.sender_id === userId ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-[#0b1424] text-slate-200 border border-white/5 rounded-tl-none'}`}>
-              <p className="text-sm font-bold leading-relaxed">{m.message}</p>
-              <p className="text-[8px] opacity-40 mt-2 font-black text-left">{new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+    <div className="fixed inset-0 z-[1000] bg-black/98 flex flex-col animate-in slide-in-from-bottom duration-300 backdrop-blur-3xl no-scrollbar rtl text-right">
+      {/* Premium Header */}
+      <header className="p-8 border-b border-white/10 flex justify-between items-center bg-[#0b1424]/90 sticky top-0 z-50 backdrop-blur-md">
+        <button onClick={onClose} className="p-4 bg-white/5 rounded-[1.5rem] shadow-xl text-slate-400 hover:text-white transition-all active:scale-90">
+          <X size={26}/>
+        </button>
+        
+        <div className="flex flex-col items-center">
+          <div className="flex items-center gap-2 mb-1">
+             <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+             <h3 className="font-black text-white italic uppercase text-2xl tracking-tighter">دعم MINEPRO</h3>
+          </div>
+          <p className="text-[10px] text-blue-500 font-black tracking-widest uppercase">الوضع الحالي: متصل الآن</p>
+        </div>
+        
+        <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-2xl">
+          <Headphones size={28} />
+        </div>
+      </header>
+
+      {/* Messages Area */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-8 no-scrollbar bg-gradient-to-b from-transparent to-blue-900/5">
+        {loading ? (
+          <div className="h-full flex flex-col items-center justify-center space-y-4 opacity-50">
+            <Loader2 className="animate-spin text-blue-500" size={48} />
+            <p className="text-[10px] font-black uppercase tracking-widest">تحميل المحادثة المشفرة...</p>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center space-y-6 text-center px-10">
+            <div className="w-24 h-24 bg-white/5 rounded-[2rem] flex items-center justify-center text-blue-500/30">
+              <MessageCircle size={48} />
+            </div>
+            <div className="space-y-2">
+              <h4 className="text-white font-black text-xl italic uppercase tracking-tighter">ابدأ المحادثة</h4>
+              <p className="text-[11px] text-slate-500 font-bold leading-relaxed">أهلاً بك، فريقنا التقني متواجد لمساعدتك. ارسل رسالتك وسنقوم بالرد عليك في أسرع وقت ممكن.</p>
             </div>
           </div>
-        ))}
+        ) : (
+          messages.map((m, idx) => {
+            const isMe = m.sender_id === userId;
+            const prevMsg = messages[idx - 1];
+            const showTime = !prevMsg || (new Date(m.created_at).getTime() - new Date(prevMsg.created_at).getTime() > 300000); // 5 mins gap
+
+            return (
+              <div key={m.id} className="space-y-2">
+                {showTime && (
+                  <div className="flex justify-center my-6">
+                    <span className="bg-white/5 px-4 py-1.5 rounded-full text-[8px] font-black text-slate-600 uppercase tracking-widest">{new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                )}
+                <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-${isMe ? 'right' : 'left'}-4 duration-300`}>
+                  <div className={`max-w-[82%] group relative`}>
+                    <div className={`p-5 rounded-[2.2rem] shadow-2xl transition-all ${isMe 
+                      ? 'bg-blue-600 text-white rounded-tr-none shadow-[0_10px_30px_rgba(37,99,235,0.3)]' 
+                      : 'bg-[#0b1424] text-slate-200 border border-white/5 rounded-tl-none'}`}>
+                      <p className="text-[14px] font-bold leading-relaxed">{m.message}</p>
+                    </div>
+                    <p className={`text-[7px] font-black uppercase tracking-widest mt-1.5 opacity-30 ${isMe ? 'text-right pr-2' : 'text-left pl-2'}`}>
+                       {isMe ? 'Sent' : 'Agent Response'} • {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
-      <div className="p-8 bg-[#0b1424] border-t border-white/10 sticky bottom-0">
-        <div className="max-w-md mx-auto relative">
-          <input value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="اكتب رسالتك..." className="w-full bg-black/40 border border-white/10 p-6 pr-20 rounded-[2rem] text-white outline-none italic text-right" />
-          <button onClick={sendMessage} className="absolute right-3 top-1/2 -translate-y-1/2 p-4 bg-blue-600 text-white rounded-2xl shadow-xl active:scale-90 transition-all"><Send size={20} /></button>
+
+      {/* Input Area */}
+      <div className="p-8 bg-[#0b1424] border-t border-white/10 backdrop-blur-xl sticky bottom-0 z-50">
+        <div className="max-w-xl mx-auto flex items-center gap-4">
+          <div className="flex-1 relative group">
+            <input 
+              value={newMessage} 
+              onKeyDown={e => e.key === 'Enter' && sendMessage()}
+              onChange={e => setNewMessage(e.target.value)} 
+              placeholder="اكتب استفسارك هنا..." 
+              className="w-full bg-black/40 border border-white/10 p-6 pr-24 rounded-[2.2rem] text-white outline-none italic text-right font-bold transition-all focus:border-blue-600 focus:bg-black/60 shadow-inner" 
+            />
+            <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-600">
+               <Sparkles size={18} />
+            </div>
+            <button 
+              onClick={sendMessage} 
+              disabled={!newMessage.trim()}
+              className={`absolute right-3 top-1/2 -translate-y-1/2 p-4.5 rounded-[1.8rem] shadow-2xl active:scale-90 transition-all flex items-center justify-center ${newMessage.trim() ? 'bg-blue-600 text-white shadow-blue-500/40' : 'bg-white/5 text-slate-700 pointer-events-none'}`}
+            >
+              <Send size={22} className={newMessage.trim() ? 'fill-current' : ''} />
+            </button>
+          </div>
         </div>
+        <p className="text-center text-[8px] text-slate-600 font-black uppercase mt-4 tracking-[0.2em]">End-to-end Encrypted Protocol Active</p>
       </div>
     </div>
   );
@@ -1154,7 +1272,7 @@ export default function App() {
   if (!userData) return <ProtocolLoadingScreen />;
 
   return (
-    <div className="min-h-screen pb-24 rtl font-['Cairo'] bg-[#020617] text-[#f8fafc] overflow-x-hidden relative">
+    <div className="min-h-screen pb-24 rtl font-['Cairo'] bg-[#020617] text-[#f8fafc] overflow-x-hidden relative no-scrollbar">
       {isProcessing && <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}
       {showTour && <GuidedTour onComplete={() => setShowTour(false)} />}
       {harvestSuccessAmount !== null && <HarvestSuccessOverlay amount={harvestSuccessAmount} onClose={() => setHarvestSuccessAmount(null)} />}
