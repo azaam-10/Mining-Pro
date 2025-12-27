@@ -692,11 +692,11 @@ function AdminView({ showToast, adminUUID, onOpenChatWithUser }: any) {
               }
 
               return (
-                <div key={item.id} onClick={() => mainTab === 'members' ? toggleSelect(p.id) : setSelectedUserDetails(p.id)} className={`bg-[#0b1424] p-8 rounded-[3.5rem] border space-y-6 shadow-2xl transition-all cursor-pointer active:scale-95 ${mainTab === 'members' && selectedUsers.has(p.id) ? 'border-blue-600 bg-blue-600/5' : 'border-white/10'}`}>
+                <div key={item.id} onClick={() => setSelectedUserDetails(p.id)} className={`bg-[#0b1424] p-8 rounded-[3.5rem] border space-y-6 shadow-2xl transition-all cursor-pointer active:scale-95 ${mainTab === 'members' && selectedUsers.has(p.id) ? 'border-blue-600 bg-blue-600/5' : 'border-white/10'}`}>
                    <div className="flex flex-row-reverse justify-between items-center text-right">
                       <div className="flex items-center gap-5 flex-row-reverse">
                          {mainTab === 'members' && (
-                           <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-colors ${selectedUsers.has(p.id) ? 'bg-blue-600 border-blue-600' : 'border-white/20'}`}>
+                           <div onClick={(e) => { e.stopPropagation(); toggleSelect(p.id); }} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-colors ${selectedUsers.has(p.id) ? 'bg-blue-600 border-blue-600' : 'border-white/20'}`}>
                               {selectedUsers.has(p.id) && <CheckSquare size={14} className="text-white" />}
                            </div>
                          )}
