@@ -37,6 +37,28 @@ const ProtocolLoadingScreen = () => (
   </div>
 );
 
+// --- PWA Install Modal ---
+function InstallPromptModal({ onInstall, onClose }: { onInstall: () => void, onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[2000] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-500">
+      <div className="bg-[#0b1424] w-full max-w-sm rounded-[3rem] border border-blue-500/30 p-8 text-center space-y-6 shadow-[0_0_50px_rgba(37,99,235,0.2)] relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1 bg-blue-500 animate-pulse"></div>
+        <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white mx-auto shadow-2xl">
+          <DownloadCloud size={40} />
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-white font-black text-2xl italic uppercase tracking-tighter">هل تريد تثبيت التطبيق؟</h3>
+          <p className="text-slate-400 text-xs font-bold leading-relaxed rtl">قم بتثبيت MINEPRO على شاشتك الرئيسية للوصول السريع ومتابعة أرباحك في أي وقت.</p>
+        </div>
+        <div className="flex flex-col gap-3">
+          <button onClick={onInstall} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-5 rounded-[1.8rem] font-black uppercase text-sm shadow-xl active:scale-95 transition-all">نعم، تثبيت الآن</button>
+          <button onClick={onClose} className="w-full bg-white/5 text-slate-500 py-4 rounded-[1.8rem] font-black uppercase text-[10px] active:scale-95 transition-all">ليس الآن</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Welcome Modal Component ---
 function WelcomeModal({ onClose }: { onClose: () => void }) {
   return (
@@ -1376,6 +1398,10 @@ export default function App() {
   const [userData, setUserData] = useState<UserState | null>(null);
   const [adminUUID, setAdminUUID] = useState<string | null>(null);
 
+  // PWA States
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+
   const showToast = useCallback((message: any, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now();
     let finalMsg = typeof message === 'string' ? message : message?.message || "حدث خطأ غير متوقع";
@@ -1415,6 +1441,15 @@ export default function App() {
   }, [showToast]);
 
   useEffect(() => {
+    // PWA: Listen for beforeinstallprompt
+    const handleInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      // Show prompt after a short delay for better UX
+      setTimeout(() => setShowInstallPrompt(true), 3000);
+    };
+    window.addEventListener('beforeinstallprompt', handleInstallPrompt);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session?.user) fetchAllUserData(session.user.id, session.user.email || '');
@@ -1425,8 +1460,22 @@ export default function App() {
       if (session?.user) fetchAllUserData(session.user.id, session.user.email || '');
       else { setUserData(null); setLoading(false); }
     });
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
+    };
   }, [fetchAllUserData]);
+
+  const handleInstallApp = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      console.log('User accepted the install prompt');
+    }
+    setDeferredPrompt(null);
+    setShowInstallPrompt(false);
+  };
 
   // Periodic Watcher for Admin Actions
   useEffect(() => {
@@ -1472,6 +1521,10 @@ export default function App() {
   return (
     <div className="min-h-screen pb-24 rtl font-['Cairo'] bg-[#020617] text-[#f8fafc] overflow-x-hidden relative no-scrollbar">
       {isProcessing && <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}
+      
+      {/* PWA Prompt */}
+      {showInstallPrompt && <InstallPromptModal onInstall={handleInstallApp} onClose={() => setShowInstallPrompt(false)} />}
+      
       {showTour && <GuidedTour onComplete={() => setShowTour(false)} />}
       {harvestSuccessAmount !== null && <HarvestSuccessOverlay amount={harvestSuccessAmount} onClose={() => setHarvestSuccessAmount(null)} />}
       {purchaseSuccessMachine !== null && <PurchaseSuccessOverlay machineName={purchaseSuccessMachine} onClose={() => setPurchaseSuccessMachine(null)} />}

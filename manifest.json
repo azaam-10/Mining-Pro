@@ -1,0 +1,22 @@
+
+{
+  "name": "MINEPRO - V-Protocol Elite",
+  "short_name": "MINEPRO",
+  "description": "High-end cryptocurrency investment platform",
+  "start_url": "/#/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/7075/7075135.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/7075/7075135.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
