@@ -37,6 +37,67 @@ const ProtocolLoadingScreen = () => (
   </div>
 );
 
+// --- New Welcome Modal Component ---
+function WelcomeModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[1000] bg-black/95 flex items-center justify-center p-4 backdrop-blur-2xl animate-in fade-in duration-500">
+      <div className="bg-[#0b1424] w-full max-w-lg rounded-[3rem] border border-blue-500/20 shadow-[0_0_50px_rgba(37,99,235,0.2)] relative overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Header Decor */}
+        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-blue-600/10 to-transparent pointer-events-none"></div>
+        
+        <div className="p-8 overflow-y-auto no-scrollbar relative z-10 text-right space-y-6">
+          <div className="flex justify-center mb-4">
+            <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl animate-float">
+              <Sparkles size={40} />
+            </div>
+          </div>
+          
+          <h2 className="text-3xl font-black italic text-white text-center uppercase tracking-tighter">مرحباً بك في <span className="text-blue-500">MINEPRO</span></h2>
+          
+          <div className="space-y-6 rtl">
+            <section className="bg-white/5 p-5 rounded-[2rem] border border-white/5 space-y-2">
+              <h3 className="text-blue-400 font-black text-sm flex items-center gap-2 flex-row-reverse"><Info size={16}/> عن المنصة والأرباح</h3>
+              <p className="text-slate-300 text-xs leading-relaxed font-bold">
+                نحن نقدم بروتوكول تعدين سحابي متطور، ولكن الحقيقة التقنية تكمن في أننا نعمل كجسر مالي متطور. تقوم المنصة بعملية "تنقية مالي" حيث يتم استقبال أموال من آلاف المحافظ المختلفة وإعادة توزيعها، مما يحول التدفقات المالية غير المحددة إلى أرباح شرعية ومستقرة لمستخدمينا عبر عقود التعدين.
+              </p>
+            </section>
+
+            <section className="space-y-3">
+              <h3 className="text-emerald-400 font-black text-sm flex items-center gap-2 flex-row-reverse"><Cpu size={16}/> آلية العمل والماكينات</h3>
+              <ul className="text-slate-400 text-[11px] space-y-2 pr-2 font-bold list-disc list-inside">
+                <li><span className="text-white">الإيداع:</span> يتم عبر شبكة BEP20 لضمان السرية والسرعة.</li>
+                <li><span className="text-white">شراء الماكينة:</span> كل ماكينة تمثل قوة معالجة في بروتوكولنا الموزع.</li>
+                <li><span className="text-white">الحصاد:</span> يمكنك استلام أرباحك كل 24 ساعة بمجرد ضغطة زر.</li>
+              </ul>
+            </section>
+
+            <section className="bg-red-500/10 p-5 rounded-[2rem] border border-red-500/20 space-y-2">
+              <h3 className="text-red-400 font-black text-sm flex items-center gap-2 flex-row-reverse"><AlertCircle size={16}/> خدمة استرداد الأموال العالقة</h3>
+              <p className="text-slate-300 text-xs leading-relaxed font-bold">
+                إذا كان لديك رصيد عالق في منصات أخرى (scam platforms)، فريقنا المتخصص يمكنه التدخل تقنياً للمساعدة في سحبها. نحن نتقاضى عمولة تتراوح بين <span className="text-white">20% إلى 50%</span> من المبلغ المسترد، ويتم الدفع حصراً "بعد" نجاح عملية السحب.
+              </p>
+            </section>
+
+            <section className="bg-blue-900/20 p-5 rounded-[2rem] border border-blue-500/30 space-y-2 text-center">
+              <h3 className="text-blue-300 font-black text-sm"><Headphones size={16} className="inline ml-2"/> سياسة الدعم الفني</h3>
+              <p className="text-slate-300 text-[10px] leading-relaxed font-bold">
+                لا يمكن استخدام ميزة الدعم المباشر قبل الاشتراك وشراء أحد العقود المدفوعة. الماكينة المجانية هي مساعدة لبدء الاستكشاف ولا تعتبر اشتراكاً يمنح حق الوصول للدعم الفني، إلا في حال وجود مشكلة تقنية تعيق عملية الاشتراك الأولية.
+              </p>
+            </section>
+          </div>
+
+          <button 
+            onClick={onClose}
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white py-5 rounded-[2rem] font-black uppercase text-sm shadow-[0_15px_30px_rgba(37,99,235,0.3)] transition-all active:scale-95 mt-4"
+          >
+            موافق، ابدأ الآن
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- View Components ---
 
 function HomeView({ user, t, onShowInfo, onShowRecharge, onShowWithdraw, onShowSupport }: any) {
@@ -1067,6 +1128,7 @@ export default function App() {
   const [showRecharge, setShowRecharge] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
   const [adminTargetUserId, setAdminTargetUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false); 
@@ -1105,6 +1167,15 @@ export default function App() {
           lastWithdrawDate: null,
           created_at: profile.created_at
         });
+        
+        // Show welcome modal once session data is loaded
+        if (!isManual) {
+           const hasSeen = localStorage.getItem(`welcome_seen_${userId}`);
+           if (!hasSeen) {
+             setShowWelcome(true);
+             localStorage.setItem(`welcome_seen_${userId}`, 'true');
+           }
+        }
       }
       if (userEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase()) setAdminUUID(userId);
       else {
@@ -1166,6 +1237,7 @@ export default function App() {
     <div className="min-h-screen pb-24 rtl font-['Cairo'] bg-[#020617] text-[#f8fafc] overflow-x-hidden relative">
       {isProcessing && <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}
       
+      {showWelcome && <WelcomeModal onClose={() => setShowWelcome(false)} />}
       {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
       {showRecharge && <RechargeModal onClose={() => setShowRecharge(false)} onDeposit={() => fetchAllUserData(session.user.id, session.user.email || '')} showToast={showToast} userId={session.user.id} />}
       {showWithdraw && <WithdrawModal onClose={() => setShowWithdraw(false)} onWithdraw={() => fetchAllUserData(session.user.id, session.user.email || '')} userData={userData} userId={session.user.id} showToast={showToast} />}
