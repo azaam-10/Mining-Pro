@@ -440,22 +440,6 @@ function HomeView({ user, onShowInfo, onShowRecharge, onShowWithdraw, onShowSupp
         <ChevronRight className="text-white/40" />
       </button>
 
-      {/* Download APK Section */}
-      <div className="bg-[#0b1424] p-6 rounded-[2.5rem] border border-white/5 flex flex-row-reverse items-center justify-between shadow-xl group hover:border-blue-500/20 transition-all cursor-pointer" onClick={() => window.open('https://your-apk-link.com/app.apk', '_blank')}>
-        <div className="flex items-center gap-4 flex-row-reverse">
-          <div className="w-14 h-14 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
-             <Smartphone size={30} />
-          </div>
-          <div className="text-right">
-             <h4 className="text-white font-black text-sm italic uppercase tracking-tight">تطبيق MINEPRO الرسمي</h4>
-             <p className="text-[10px] text-blue-500 font-bold uppercase tracking-widest">تحميل ملف APK للأندرويد</p>
-          </div>
-        </div>
-        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
-          <DownloadCloud size={18} />
-        </div>
-      </div>
-
       {/* Rescue Stuck Funds Card - Enhanced UI */}
       <div className="bg-gradient-to-br from-[#1e1b4b] to-[#020617] p-8 rounded-[3.5rem] border border-blue-500/30 shadow-[0_20px_50px_rgba(30,27,75,0.6)] relative overflow-hidden group border-t-blue-400/20">
         <div className="absolute -left-10 -top-10 w-40 h-40 bg-blue-600/10 blur-[80px] rounded-full"></div>
@@ -1036,7 +1020,7 @@ function WithdrawModal({ onClose, onWithdraw, userData, userId, showToast }: any
 
   return (
     <div className="fixed inset-0 z-[600] bg-black/95 flex items-center justify-center p-6 backdrop-blur-xl animate-in zoom-in-95 duration-300">
-      <div className="bg-[#0b1424] w-full max-w-sm rounded-[4rem] p-10 space-y-8 relative border border-white/10 shadow-2xl text-right">
+      <div className="bg-[#0b1424] w-full max-sm:w-[95%] rounded-[4rem] p-10 space-y-8 relative border border-white/10 shadow-2xl text-right">
         <button onClick={onClose} className="absolute top-8 right-8 p-2.5 bg-white/5 rounded-2xl"><X size={20}/></button>
         <h3 className="text-center font-black italic text-3xl uppercase text-white">سحب الرصيد</h3>
         
