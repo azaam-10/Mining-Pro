@@ -24,7 +24,17 @@ const generateMachines = (): Machine[] => {
   const prices: number[] = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000, 2000, 3000, 4000, 5000, 10000, 900000, 1000000];
 
   prices.forEach((price, index) => {
-    const dailyProfit = price === 10 ? 1.02 : Number((price * 0.102).toFixed(2));
+    // New tempting profit logic: 10 -> 1.02, 20 -> 2.1, 30 -> 3.2, 40 -> 4.4...
+    let dailyProfit = 0;
+    if (price === 10) dailyProfit = 1.02;
+    else if (price === 20) dailyProfit = 2.10;
+    else if (price === 30) dailyProfit = 3.20;
+    else {
+      // Escalating profit percentage for higher tiers
+      const basePercent = 0.105 + (index * 0.002); 
+      dailyProfit = Number((price * basePercent).toFixed(2));
+    }
+    
     const duration = 20; 
 
     let name = "";
