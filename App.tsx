@@ -418,13 +418,36 @@ function HomeView({ user, onShowInfo, onShowRecharge, onShowWithdraw, onShowSupp
         <ChevronRight className="text-white/40" />
       </button>
 
-      <div className="bg-[#1e1b4b] p-8 rounded-[3rem] border border-blue-500/20 shadow-2xl relative overflow-hidden group">
-        <div className="flex flex-row-reverse items-center gap-6">
-          <div className="w-20 h-20 bg-red-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl shrink-0 animate-pulse"><AlertCircle size={44} /></div>
-          <div className="text-right space-y-4 flex-1">
-            <h4 className="text-white font-black text-xl italic uppercase tracking-tighter">هل لديك أموال عالقة؟</h4>
-            <p className="text-[11px] text-slate-400 font-bold leading-relaxed">إذا كنت تواجه مشكلة في سحب أموالك من أي منصة مهام أخرى، فنحن هنا للمساعدة.</p>
-            <button onClick={onShowSupport} className="bg-white text-[#1e1b4b] px-6 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-wider flex items-center gap-2 shadow-lg mr-auto">اطلب المساعدة الآن <MessageCircle size={16} className="fill-current" /></button>
+      {/* Rescue Stuck Funds Card - Enhanced UI */}
+      <div className="bg-gradient-to-br from-[#1e1b4b] to-[#020617] p-8 rounded-[3.5rem] border border-blue-500/30 shadow-[0_20px_50px_rgba(30,27,75,0.6)] relative overflow-hidden group border-t-blue-400/20">
+        <div className="absolute -left-10 -top-10 w-40 h-40 bg-blue-600/10 blur-[80px] rounded-full"></div>
+        <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-indigo-600/10 blur-[80px] rounded-full"></div>
+        
+        <div className="flex flex-row-reverse items-center gap-6 relative z-10">
+          <div className="relative shrink-0">
+            <div className="absolute inset-0 bg-red-500/40 blur-2xl rounded-full animate-pulse"></div>
+            <div className="w-20 h-20 bg-gradient-to-tr from-red-600 to-rose-400 rounded-[2.2rem] flex items-center justify-center text-white shadow-[0_10px_30px_rgba(225,29,72,0.4)] border border-white/20 relative z-10 transform group-hover:rotate-6 transition-transform">
+              <ShieldAlert size={44} className="drop-shadow-lg" />
+            </div>
+          </div>
+          
+          <div className="text-right space-y-3 flex-1">
+            <div className="flex flex-row-reverse items-center gap-2">
+              <span className="bg-red-500/20 text-red-400 text-[8px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full border border-red-500/20">Recovery Protocol</span>
+              <h4 className="text-white font-black text-2xl italic uppercase tracking-tighter leading-tight drop-shadow-sm">هل لديك أموال عالقة؟</h4>
+            </div>
+            <p className="text-[11px] text-slate-300 font-bold leading-relaxed opacity-95">إذا كنت تواجه مشكلة في سحب أموالك من أي منصة مهام أخرى، فنحن هنا للمساعدة فريقنا المتخصص يمكنه تقديم الدعم والمشورة لاستعادة حقوقك.</p>
+            <div className="pt-2">
+              <button 
+                onClick={onShowSupport} 
+                className="bg-white text-[#1e1b4b] px-8 py-4 rounded-2xl font-black text-[12px] uppercase tracking-wider flex items-center gap-3 shadow-[0_10px_25px_rgba(255,255,255,0.2)] hover:scale-105 active:scale-95 transition-all mr-auto"
+              >
+                اطلب المساعدة الآن 
+                <div className="w-6 h-6 bg-[#1e1b4b] rounded-lg flex items-center justify-center text-white">
+                  <ChevronRight size={14} className="rotate-180" />
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       </div>
